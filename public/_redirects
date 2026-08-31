@@ -1,2 +1,1 @@
-/* SPA fallback for Cloudflare Pages */
-/*    /index.html   200
+# Hash-based routing (#p=...); no server-side redirects required.
