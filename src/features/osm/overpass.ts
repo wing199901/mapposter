@@ -1,12 +1,5 @@
 import type { OsmFeature, Viewport } from "@/lib/types"
 
-const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-  "https://overpass.openstreetmap.ru/api/interpreter",
-]
-
 type OverpassElement = {
   type: "way" | "relation" | "node"
   id: number
@@ -99,17 +92,18 @@ function toFeatures(response: OverpassResponse): OsmFeature[] {
   return features
 }
 
-async function fetchFromEndpoint(endpoint: string, query: string): Promise<OsmFeature[]> {
-  const response = await fetch(endpoint, {
+async function fetchFromProxy(query: string): Promise<OsmFeature[]> {
+  const response = await fetch("/api/overpass", {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      "Content-Type": "application/json",
     },
-    body: `data=${encodeURIComponent(query)}`,
+    body: JSON.stringify({ query }),
   })
 
   if (!response.ok) {
-    throw new Error(`Overpass error ${response.status} from ${endpoint}`)
+    const payload = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(payload.error ?? `Overpass proxy failed (${response.status})`)
   }
 
   const payload = (await response.json()) as OverpassResponse
@@ -118,19 +112,5 @@ async function fetchFromEndpoint(endpoint: string, query: string): Promise<OsmFe
 
 export async function fetchOsmFeatures(viewport: Viewport): Promise<OsmFeature[]> {
   const query = buildQuery(viewport)
-  const attempts = await Promise.allSettled(
-    OVERPASS_ENDPOINTS.map((endpoint) => fetchFromEndpoint(endpoint, query)),
-  )
-
-  const success = attempts.find((result) => result.status === "fulfilled")
-  if (success && success.status === "fulfilled") {
-    return success.value
-  }
-
-  const message = attempts
-    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-    .map((result) => String(result.reason))
-    .join("; ")
-
-  throw new Error(message || "All Overpass endpoints failed")
+  return fetchFromProxy(query)
 }
