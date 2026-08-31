@@ -91,6 +91,23 @@ test.describe("Map Poster Studio", () => {
     expect(hash).toMatch(/^#p=/)
   })
 
+  test("re-renders preview when theme changes after generate", async ({ page }) => {
+    await mockPosterApis(page)
+    await page.goto("/")
+
+    await page.getByRole("button", { name: "Generate poster" }).click()
+    await expect(page.getByText("Poster ready")).toBeVisible({ timeout: 30_000 })
+
+    const preview = page.getByRole("img", { name: /Paris map poster preview/i })
+    const initialSrc = await preview.getAttribute("src")
+    expect(initialSrc).toMatch(/^blob:/)
+
+    await page.getByRole("button", { name: "Noir" }).click()
+    await expect
+      .poll(async () => preview.getAttribute("src"), { timeout: 10_000 })
+      .not.toBe(initialSrc)
+  })
+
   test("applies export preset dimensions", async ({ page }) => {
     await page.goto("/")
     await page.getByRole("tab", { name: "Export" }).click()

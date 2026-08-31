@@ -14,7 +14,7 @@ Render posters entirely in the browser:
 
 - Fetch OpenStreetMap features via Overpass API
 - Geocode with Nominatim (optionally proxied through a Pages Function)
-- Draw layers on Canvas 2D inside a Web Worker
+- Draw layers on Canvas 2D in the browser (preview via Web Worker + OffscreenCanvas when supported; export on the main thread)
 - Export PNG at true pixel dimensions (`inches × 300`)
 
 ## Consequences

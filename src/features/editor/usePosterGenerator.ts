@@ -1,13 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { exportAllThemesZip, exportPosterPng } from "@/features/export/batchExport"
 import { geocodeCity } from "@/features/geocode/nominatim"
-import { osmCacheKey, readOsmCache, writeOsmCache } from "@/features/osm/cache"
+import {
+  geocodeCacheKey,
+  osmCacheKey,
+  readGeocodeCache,
+  readOsmCache,
+  writeGeocodeCache,
+  writeOsmCache,
+} from "@/features/osm/cache"
 import { fetchOsmFeatures } from "@/features/osm/overpass"
+import {
+  bitmapToObjectUrl,
+  renderPreviewInWorker,
+  renderPreviewOnMainThread,
+  revokePreviewUrl,
+} from "@/features/render/posterPreview"
 import { loadPosterFont } from "@/features/render/typography"
-import { drawPoster, canvasToDataUrl } from "@/features/render/drawPoster"
 import { loadTheme } from "@/features/themes/themeRegistry"
-import type { GenerationProgress, OsmFeature, PosterConfig } from "@/lib/types"
+import type { GenerationProgress, OsmFeature, PosterConfig, Viewport } from "@/lib/types"
 import {
   loadPosterState,
   posterPixelSize,
@@ -26,8 +38,18 @@ const DEFAULT_CONFIG: PosterConfig = {
   heightInches: 16,
 }
 
+const PREVIEW_DEBOUNCE_MS = 150
+
 function initialConfig(): PosterConfig {
   return readStateFromLocation() ?? loadPosterState() ?? DEFAULT_CONFIG
+}
+
+function previewDimensions(config: PosterConfig): { widthPx: number; heightPx: number } {
+  const previewWidth = 720
+  return {
+    widthPx: previewWidth,
+    heightPx: Math.round(previewWidth * (config.heightInches / config.widthInches)),
+  }
 }
 
 export function usePosterGenerator() {
@@ -39,52 +61,140 @@ export function usePosterGenerator() {
     message: "Ready",
   })
   const [error, setError] = useState<string | null>(null)
+  const previewUrlRef = useRef("")
 
   const theme = useMemo(
     () => loadTheme(config.themeId, config.customTheme),
     [config.customTheme, config.themeId],
   )
 
-  const renderPreview = useCallback(
-    (nextFeatures: OsmFeature[], nextConfig: PosterConfig) => {
-      const canvas = document.createElement("canvas")
-      const previewWidth = 720
-      const previewHeight = Math.round(
-        previewWidth * (nextConfig.heightInches / nextConfig.widthInches),
-      )
+  const previewStyleKey = useMemo(
+    () =>
+      JSON.stringify({
+        themeId: config.themeId,
+        customTheme: config.customTheme,
+        display: config.display,
+        fontFamily: config.fontFamily,
+        viewport: config.viewport,
+        widthInches: config.widthInches,
+        heightInches: config.heightInches,
+      }),
+    [
+      config.customTheme,
+      config.display,
+      config.fontFamily,
+      config.heightInches,
+      config.themeId,
+      config.viewport,
+      config.widthInches,
+    ],
+  )
 
-      drawPoster(canvas, {
+  const setPreviewObjectUrl = useCallback((nextUrl: string) => {
+    if (previewUrlRef.current) {
+      revokePreviewUrl(previewUrlRef.current)
+    }
+    previewUrlRef.current = nextUrl
+    setPreviewUrl(nextUrl)
+  }, [])
+
+  const renderPreview = useCallback(
+    async (nextFeatures: OsmFeature[], nextConfig: PosterConfig) => {
+      const { widthPx, heightPx } = previewDimensions(nextConfig)
+      const input = {
         features: nextFeatures,
         theme: loadTheme(nextConfig.themeId, nextConfig.customTheme),
         viewport: nextConfig.viewport,
         display: nextConfig.display,
         fontFamily: nextConfig.fontFamily,
-        widthPx: previewWidth,
-        heightPx: previewHeight,
-        previewScale: 0.75,
+        widthPx,
+        heightPx,
+        previewScale: 0.5,
+      }
+
+      try {
+        const bitmap = await renderPreviewInWorker(input)
+        const nextUrl = await bitmapToObjectUrl(bitmap)
+        setPreviewObjectUrl(nextUrl)
+      } catch {
+        const nextUrl = await renderPreviewOnMainThread(input)
+        setPreviewObjectUrl(nextUrl)
+      }
+    },
+    [setPreviewObjectUrl],
+  )
+
+  const resolveViewport = useCallback(
+    async (
+      currentConfig: PosterConfig,
+    ): Promise<{ viewport: Viewport; geocodeCacheHit: boolean; skippedGeocode: boolean }> => {
+      const city = currentConfig.geocode.city.trim()
+      const country = currentConfig.geocode.country.trim()
+
+      if (!city || !country) {
+        return {
+          viewport: currentConfig.viewport,
+          geocodeCacheHit: false,
+          skippedGeocode: true,
+        }
+      }
+
+      const cacheKey = geocodeCacheKey({ city, country })
+      const cached = await readGeocodeCache(cacheKey)
+      if (cached) {
+        return {
+          viewport: {
+            ...currentConfig.viewport,
+            latitude: cached.latitude,
+            longitude: cached.longitude,
+          },
+          geocodeCacheHit: true,
+          skippedGeocode: false,
+        }
+      }
+
+      const result = await geocodeCity({ city, country })
+      await writeGeocodeCache(cacheKey, {
+        latitude: result.latitude,
+        longitude: result.longitude,
+        displayName: result.displayName,
+        fetchedAt: Date.now(),
       })
 
-      setPreviewUrl(canvasToDataUrl(canvas))
+      return {
+        viewport: {
+          ...currentConfig.viewport,
+          latitude: result.latitude,
+          longitude: result.longitude,
+        },
+        geocodeCacheHit: false,
+        skippedGeocode: false,
+      }
     },
     [],
   )
 
   const generate = useCallback(async () => {
     setError(null)
-    setProgress({ phase: "geocoding", message: "Geocoding city…" })
 
     try {
-      let viewport = config.viewport
-      if (config.geocode.city && config.geocode.country) {
-        const result = await geocodeCity(config.geocode)
-        viewport = {
-          ...viewport,
-          latitude: result.latitude,
-          longitude: result.longitude,
-        }
+      let geocodeMessage = "Geocoding city…"
+      const { viewport: resolvedViewport, geocodeCacheHit, skippedGeocode } =
+        await resolveViewport(config)
+
+      if (skippedGeocode) {
+        geocodeMessage = "Using manual coordinates"
+      } else if (geocodeCacheHit) {
+        geocodeMessage = "Using cached geocode"
+      }
+
+      setProgress({ phase: "geocoding", message: geocodeMessage })
+
+      const nextViewport = resolvedViewport
+      if (!skippedGeocode) {
         setConfig((current) => ({
           ...current,
-          viewport,
+          viewport: nextViewport,
           display: {
             city: current.display.city || config.geocode.city,
             country: current.display.country || config.geocode.country,
@@ -92,21 +202,36 @@ export function usePosterGenerator() {
         }))
       }
 
-      setProgress({ phase: "fetching", message: "Fetching OpenStreetMap data…", progress: 0.35 })
-      const cacheKey = osmCacheKey(viewport.latitude, viewport.longitude, viewport.radiusMeters)
+      const cacheKey = osmCacheKey(
+        nextViewport.latitude,
+        nextViewport.longitude,
+        nextViewport.radiusMeters,
+      )
       let nextFeatures = await readOsmCache(cacheKey)
+
       if (!nextFeatures) {
-        const fetched = await fetchOsmFeatures(viewport)
+        setProgress({
+          phase: "fetching",
+          message: "Fetching OpenStreetMap data…",
+          progress: 0.35,
+        })
+        const fetched = await fetchOsmFeatures(nextViewport)
         nextFeatures = { features: fetched, fetchedAt: Date.now() }
         await writeOsmCache(cacheKey, nextFeatures)
+      } else {
+        setProgress({
+          phase: "fetching",
+          message: "Using cached map data",
+          progress: 0.35,
+        })
       }
 
       setFeatures(nextFeatures.features)
       setProgress({ phase: "rendering", message: "Rendering preview…", progress: 0.75 })
 
-      const mergedConfig = { ...config, viewport }
+      const mergedConfig = { ...config, viewport: nextViewport }
       await loadPosterFont(mergedConfig.fontFamily)
-      renderPreview(nextFeatures.features, mergedConfig)
+      await renderPreview(nextFeatures.features, mergedConfig)
       savePosterState(mergedConfig)
       writeStateToLocation(mergedConfig)
 
@@ -116,7 +241,7 @@ export function usePosterGenerator() {
       setError(message)
       setProgress({ phase: "error", message })
     }
-  }, [config, renderPreview])
+  }, [config, renderPreview, resolveViewport])
 
   const exportCurrent = useCallback(async () => {
     if (features.length === 0) {
@@ -154,6 +279,31 @@ export function usePosterGenerator() {
     savePosterState(config)
     writeStateToLocation(config)
   }, [config])
+
+  useEffect(() => {
+    if (features.length === 0) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        await loadPosterFont(config.fontFamily)
+        await renderPreview(features, config)
+      })()
+    }, PREVIEW_DEBOUNCE_MS)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [config, features, previewStyleKey, renderPreview])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        revokePreviewUrl(previewUrlRef.current)
+      }
+    }
+  }, [])
 
   return {
     config,

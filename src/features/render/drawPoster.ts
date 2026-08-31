@@ -4,6 +4,9 @@ import { createProjector, fitToCanvas } from "@/features/render/projection"
 import { roadColor, roadWidth, roadZIndex } from "@/features/render/roadStyle"
 import { drawTypography } from "@/features/render/typography"
 
+export type DrawableCanvas = HTMLCanvasElement | OffscreenCanvas
+type DrawableContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+
 export interface DrawPosterInput {
   features: OsmFeature[]
   theme: PosterTheme
@@ -16,7 +19,7 @@ export interface DrawPosterInput {
 }
 
 function drawGradientFade(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawableContext,
   width: number,
   height: number,
   color: string,
@@ -35,7 +38,7 @@ function drawGradientFade(
 }
 
 function drawPolygon(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawableContext,
   points: Array<[number, number]>,
   fill: string,
 ): void {
@@ -54,7 +57,7 @@ function drawPolygon(
 }
 
 function drawPolyline(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawableContext,
   points: Array<[number, number]>,
   stroke: string,
   lineWidth: number,
@@ -75,7 +78,7 @@ function drawPolyline(
   ctx.stroke()
 }
 
-export function drawPoster(canvas: HTMLCanvasElement, input: DrawPosterInput): void {
+export function drawPoster(canvas: DrawableCanvas, input: DrawPosterInput): void {
   const {
     features,
     theme,
@@ -147,10 +150,19 @@ export function drawPoster(canvas: HTMLCanvasElement, input: DrawPosterInput): v
   }
 
   drawGradientFade(ctx, widthPx, heightPx, theme.gradient_color)
-  drawTypography(ctx, widthPx, heightPx, { theme, viewport, display, fontFamily })
+  drawTypography(ctx as CanvasRenderingContext2D, widthPx, heightPx, {
+    theme,
+    viewport,
+    display,
+    fontFamily,
+  })
 }
 
-export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+export function canvasToPngBlob(canvas: DrawableCanvas): Promise<Blob> {
+  if (canvas instanceof OffscreenCanvas) {
+    return canvas.convertToBlob({ type: "image/png" })
+  }
+
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
