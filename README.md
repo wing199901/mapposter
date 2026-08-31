@@ -27,7 +27,23 @@ npm run preview
 
 - Build command: `npm run build`
 - Output directory: `dist`
-- Functions: `functions/` (geocode proxy at `/api/geocode`)
+- Functions: `functions/` (`/api/geocode`, `/api/overpass`)
+- Wrangler config: `wrangler.toml`
+
+### KV setup (edge geocode cache)
+
+1. Create a KV namespace:
+
+```bash
+npx wrangler kv namespace create PROXY_CACHE
+```
+
+2. Copy the returned namespace `id` into `wrangler.toml` under `[[kv_namespaces]]`.
+3. Redeploy the Pages project (or bind the namespace in the Cloudflare dashboard under **Settings → Bindings**).
+
+The geocode proxy caches successful Nominatim responses in KV for 30 days (`X-Cache: HIT|MISS` response header). This does **not** reduce Pages Function invocations — it reduces upstream Nominatim traffic. Returning users with browser geocode cache may skip `/api/geocode` entirely.
+
+Local `npm run dev` simulates the same KV behaviour with an in-memory cache in `vite.dev-proxy.ts`.
 
 ## Features
 

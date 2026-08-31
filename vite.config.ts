@@ -8,9 +8,10 @@ import { devApiProxyPlugin } from "./vite.dev-proxy.js"
 export default defineConfig({
   plugins: [react(), tailwindcss(), devApiProxyPlugin()],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      { find: /^@shared\/(.*)$/, replacement: `${path.resolve(__dirname, "./shared")}/$1` },
+    ],
   },
   worker: {
     format: "es",

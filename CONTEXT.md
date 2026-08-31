@@ -24,6 +24,10 @@ The city and country strings sent to Nominatim to resolve coordinates.
 
 Resolved coordinates keyed by normalized city and country strings, stored in the browser to skip repeat Nominatim lookups.
 
+## Edge geocode cache
+
+Cross-user geocode results cached at the proxy layer so repeat lookups can skip Nominatim without relying on a single browser session.
+
 ## Preset
 
 A named export size pairing width and height in inches at 300 DPI (for example A4, Instagram Post).

@@ -1,5 +1,12 @@
 import type { Plugin } from "vite"
 
+/// <reference path="./functions/env.d.ts" />
+
+import {
+  readDevEdgeGeocode,
+  writeDevEdgeGeocode,
+} from "./shared/devEdgeGeocodeCache.js"
+
 const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
@@ -40,6 +47,42 @@ async function proxyOverpassQuery(query: string): Promise<Response> {
   return Response.json({ error: message || "All Overpass endpoints failed" }, { status: 502 })
 }
 
+async function fetchNominatimGeocode(city: string, country: string) {
+  const query = encodeURIComponent(`${city}, ${country}`)
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+    {
+      headers: {
+        "User-Agent": "mapposter-web/1.0 (local dev)",
+        Accept: "application/json",
+      },
+    },
+  )
+
+  if (!response.ok) {
+    return { status: 502 as const, body: { error: "Nominatim request failed" } }
+  }
+
+  const results = (await response.json()) as Array<{
+    lat: string
+    lon: string
+    display_name: string
+  }>
+  const first = results[0]
+  if (!first) {
+    return { status: 404 as const, body: { error: "No results found" } }
+  }
+
+  return {
+    status: 200 as const,
+    body: {
+      latitude: Number(first.lat),
+      longitude: Number(first.lon),
+      displayName: first.display_name,
+    },
+  }
+}
+
 export function devApiProxyPlugin(): Plugin {
   return {
     name: "dev-api-proxy",
@@ -62,43 +105,34 @@ export function devApiProxyPlugin(): Plugin {
             return
           }
 
-          const query = encodeURIComponent(`${city}, ${country}`)
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-            {
-              headers: {
-                "User-Agent": "mapposter-web/1.0 (local dev)",
-                Accept: "application/json",
-              },
-            },
-          )
-
-          if (!response.ok) {
-            res.statusCode = 502
-            res.end(JSON.stringify({ error: "Nominatim request failed" }))
+          const cached = readDevEdgeGeocode(city, country)
+          if (cached) {
+            res.statusCode = 200
+            res.setHeader("Content-Type", "application/json")
+            res.setHeader("X-Cache", "HIT")
+            res.end(
+              JSON.stringify({
+                latitude: cached.latitude,
+                longitude: cached.longitude,
+                displayName: cached.displayName,
+              }),
+            )
             return
           }
 
-          const results = (await response.json()) as Array<{
-            lat: string
-            lon: string
-            display_name: string
-          }>
-          const first = results[0]
-          if (!first) {
-            res.statusCode = 404
-            res.end(JSON.stringify({ error: "No results found" }))
+          const result = await fetchNominatimGeocode(city, country)
+          if (result.status !== 200) {
+            res.statusCode = result.status
+            res.end(JSON.stringify(result.body))
             return
           }
 
+          writeDevEdgeGeocode(city, country, result.body)
+
+          res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
-          res.end(
-            JSON.stringify({
-              latitude: Number(first.lat),
-              longitude: Number(first.lon),
-              displayName: first.display_name,
-            }),
-          )
+          res.setHeader("X-Cache", "MISS")
+          res.end(JSON.stringify(result.body))
         })()
       })
 

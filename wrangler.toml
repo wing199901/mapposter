@@ -1,1 +1,9 @@
 pages_build_output_dir = "dist"
+compatibility_date = "2024-09-23"
+
+# Create the namespace with:
+#   npx wrangler kv namespace create PROXY_CACHE
+# Then replace the id below with the returned namespace id.
+[[kv_namespaces]]
+binding = "PROXY_CACHE"
+id = "00000000000000000000000000000000"

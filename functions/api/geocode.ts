@@ -1,11 +1,23 @@
-export const onRequestGet = async (context: {
-  request: Request
-}): Promise<Response> => {
+export const onRequestGet: PagesFunction<Env> = async (context) => {
   const city = new URL(context.request.url).searchParams.get("city")?.trim()
   const country = new URL(context.request.url).searchParams.get("country")?.trim()
 
   if (!city || !country) {
     return Response.json({ error: "city and country are required" }, { status: 400 })
+  }
+
+  const { readEdgeGeocode, writeEdgeGeocode } = await import("../lib/edgeCache")
+
+  const cached = await readEdgeGeocode(context.env, city, country)
+  if (cached) {
+    return Response.json(
+      {
+        latitude: cached.latitude,
+        longitude: cached.longitude,
+        displayName: cached.displayName,
+      },
+      { headers: { "X-Cache": "HIT" } },
+    )
   }
 
   const query = encodeURIComponent(`${city}, ${country}`)
@@ -29,9 +41,13 @@ export const onRequestGet = async (context: {
     return Response.json({ error: "No results found" }, { status: 404 })
   }
 
-  return Response.json({
+  const payload = {
     latitude: Number(first.lat),
     longitude: Number(first.lon),
     displayName: first.display_name,
-  })
+  }
+
+  await writeEdgeGeocode(context.env, city, country, payload)
+
+  return Response.json(payload, { headers: { "X-Cache": "MISS" } })
 }

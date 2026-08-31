@@ -1,21 +1,32 @@
 import { describe, expect, it } from "vitest"
 
+import { geocodeCacheKey, osmCacheKey } from "@/features/osm/cache"
 import {
   CACHE_TTL_MS,
-  geocodeCacheKey,
+  CACHE_TTL_SECONDS,
+  edgeGeocodeKvKey,
+  geocodeCacheKey as sharedGeocodeCacheKey,
   isCacheStale,
-  osmCacheKey,
-} from "@/features/osm/cache"
+} from "../../shared/proxyCacheKeys"
 
-describe("cache keys", () => {
+describe("shared cache keys", () => {
   it("normalizes geocode cache keys", () => {
+    expect(sharedGeocodeCacheKey(" Paris ", " France ")).toBe("paris:france")
+    expect(sharedGeocodeCacheKey("東京", "Japan")).toBe("東京:japan")
     expect(geocodeCacheKey({ city: " Paris ", country: " France " })).toBe("paris:france")
-    expect(geocodeCacheKey({ city: "東京", country: "Japan" })).toBe("東京:japan")
+  })
+
+  it("builds edge kv keys from geocode keys", () => {
+    expect(edgeGeocodeKvKey("Paris", "France")).toBe("geocode:paris:france")
   })
 
   it("rounds osm cache keys to five decimal places", () => {
     expect(osmCacheKey(48.85661, 2.35221, 10000)).toBe("48.85661:2.35221:10000")
     expect(osmCacheKey(48.856619, 2.352219, 10500)).toBe("48.85662:2.35222:10500")
+  })
+
+  it("aligns ttl constants", () => {
+    expect(CACHE_TTL_SECONDS).toBe(CACHE_TTL_MS / 1000)
   })
 })
 

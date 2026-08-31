@@ -1,8 +1,9 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb"
 
 import type { GeocodeQuery, OsmBundle } from "@/lib/types"
+import { geocodeCacheKey as sharedGeocodeCacheKey, isCacheStale } from "../../../shared/proxyCacheKeys"
 
-export const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000
+export { CACHE_TTL_MS, isCacheStale } from "../../../shared/proxyCacheKeys"
 
 export interface GeocodeBundle {
   latitude: number
@@ -44,16 +45,12 @@ function getDb() {
   return dbPromise
 }
 
-export function isCacheStale(fetchedAt: number, ttlMs = CACHE_TTL_MS): boolean {
-  return Date.now() - fetchedAt > ttlMs
-}
-
 export function osmCacheKey(latitude: number, longitude: number, radiusMeters: number): string {
   return `${latitude.toFixed(5)}:${longitude.toFixed(5)}:${Math.round(radiusMeters)}`
 }
 
 export function geocodeCacheKey(query: GeocodeQuery): string {
-  return `${query.city.trim().toLowerCase()}:${query.country.trim().toLowerCase()}`
+  return sharedGeocodeCacheKey(query.city, query.country)
 }
 
 export async function readOsmCache(key: string): Promise<OsmBundle | undefined> {
