@@ -23,11 +23,12 @@ npm run build
 npm run preview
 ```
 
-## Cloudflare Pages
+## Cloudflare (Workers Builds)
 
 - Build command: `npm run build`
-- Output directory: `dist`
-- Functions: `functions/` (`/api/geocode`, `/api/overpass`)
+- Deploy command: `npm run deploy`
+- Static assets: `dist/` (via `wrangler.toml` `[assets]`)
+- API routes: compiled from `functions/` (`/api/geocode`, `/api/overpass`)
 - Wrangler config: `wrangler.toml`
 
 ### KV setup (edge geocode cache)
