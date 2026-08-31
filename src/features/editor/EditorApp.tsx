@@ -7,11 +7,25 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator, Textarea } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EXPORT_PRESETS } from "@/features/export/presets"
+import { isKnownPosterFont, POSTER_FONT_OPTIONS } from "@/features/editor/fontOptions"
+import {
+  isGenerationBusy,
+  resolveProgressPercent,
+} from "@/features/editor/generationProgress"
+import { ThemeSwatchCard } from "@/features/editor/ThemeSwatchCard"
 import { usePosterGenerator } from "@/features/editor/usePosterGenerator"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
 import type { PosterTheme } from "@/lib/types"
@@ -38,8 +52,10 @@ export function EditorApp() {
   } = usePosterGenerator()
 
   const [themeJson, setThemeJson] = useState("")
+  const [locationMode, setLocationMode] = useState<"search" | "coordinates">("search")
   const themes = useMemo(() => listThemes(), [])
-  const isBusy = ["geocoding", "fetching", "rendering", "exporting"].includes(progress.phase)
+  const isBusy = isGenerationBusy(progress)
+  const progressPercent = resolveProgressPercent(progress)
 
   const shareLink = `${window.location.origin}${window.location.pathname}#p=${encodePosterState(config)}`
 
@@ -57,98 +73,160 @@ export function EditorApp() {
               Turn any city into a minimalist map poster — client-side, print-ready, Cloudflare Pages friendly.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{progress.message}</Badge>
-            <Button
-              variant="outline"
-              onClick={() => {
-                navigator.clipboard.writeText(shareLink)
-                toast.success("Share link copied")
-              }}
-            >
-              <Share2 data-icon="inline-start" />
-              Share
-            </Button>
+          <div className="flex min-w-0 flex-1 flex-col items-end gap-2 sm:max-w-sm">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{progress.message}</Badge>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(shareLink)
+                  toast.success("Share link copied")
+                }}
+              >
+                <Share2 data-icon="inline-start" />
+                Share
+              </Button>
+            </div>
+            {isBusy ? (
+              <div className="w-full space-y-1">
+                <Progress value={progressPercent} />
+                <p className="text-right text-xs text-muted-foreground">{progressPercent}%</p>
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1600px] gap-4 p-4 lg:grid-cols-[320px_minmax(0,1fr)_340px] lg:p-6">
-        <Card className="h-fit">
+      <main className="mx-auto grid max-w-[1600px] gap-4 p-4 lg:grid-cols-[1fr_2fr] lg:p-6">
+        <div className="flex flex-col gap-4">
+          <Card className="h-fit">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="size-4" />
               Location
             </CardTitle>
-            <CardDescription>Geocode a city or override coordinates manually.</CardDescription>
+            <CardDescription>
+              Choose a place name to look up coordinates, or enter lat/lon directly.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                value={config.geocode.city}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    geocode: { ...current.geocode, city: event.target.value },
-                  }))
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="country">Country</Label>
-              <Input
-                id="country"
-                value={config.geocode.country}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    geocode: { ...current.geocode, country: event.target.value },
-                  }))
-                }
-              />
-            </div>
-            <Separator />
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="lat">Latitude</Label>
-                <Input
-                  id="lat"
-                  type="number"
-                  step="0.0001"
-                  value={config.viewport.latitude}
-                  onChange={(event) =>
-                    setConfig((current) => ({
-                      ...current,
-                      viewport: {
-                        ...current.viewport,
-                        latitude: Number(event.target.value),
-                      },
-                    }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="lon">Longitude</Label>
-                <Input
-                  id="lon"
-                  type="number"
-                  step="0.0001"
-                  value={config.viewport.longitude}
-                  onChange={(event) =>
-                    setConfig((current) => ({
-                      ...current,
-                      viewport: {
-                        ...current.viewport,
-                        longitude: Number(event.target.value),
-                      },
-                    }))
-                  }
-                />
-              </div>
-            </div>
+            <Tabs
+              value={locationMode}
+              onValueChange={(value) => setLocationMode(value as "search" | "coordinates")}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="search">Place name</TabsTrigger>
+                <TabsTrigger value="coordinates">Coordinates</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="search" className="flex flex-col gap-4">
+                <p className="text-xs text-muted-foreground">
+                  City and country update poster labels automatically. Coordinates are resolved when
+                  you generate.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={config.geocode.city}
+                    onChange={(event) => {
+                      const city = event.target.value
+                      setConfig((current) => ({
+                        ...current,
+                        geocode: { ...current.geocode, city },
+                        display: { ...current.display, city },
+                      }))
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="country">Country</Label>
+                  <Input
+                    id="country"
+                    value={config.geocode.country}
+                    onChange={(event) => {
+                      const country = event.target.value
+                      setConfig((current) => ({
+                        ...current,
+                        geocode: { ...current.geocode, country },
+                        display: { ...current.display, country },
+                      }))
+                    }}
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="coordinates" className="flex flex-col gap-4">
+                <p className="text-xs text-muted-foreground">
+                  Use this when you already know the center point. Geocoding is skipped; only
+                  latitude, longitude, and radius below are used.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="lat">Latitude</Label>
+                    <Input
+                      id="lat"
+                      type="number"
+                      step="0.0001"
+                      value={config.viewport.latitude}
+                      onChange={(event) =>
+                        setConfig((current) => ({
+                          ...current,
+                          viewport: {
+                            ...current.viewport,
+                            latitude: Number(event.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="lon">Longitude</Label>
+                    <Input
+                      id="lon"
+                      type="number"
+                      step="0.0001"
+                      value={config.viewport.longitude}
+                      onChange={(event) =>
+                        setConfig((current) => ({
+                          ...current,
+                          viewport: {
+                            ...current.viewport,
+                            longitude: Number(event.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+
             <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="map-shape">Map shape</Label>
+                <Select
+                  value={config.mapShape}
+                  onValueChange={(value) =>
+                    setConfig((current) => ({
+                      ...current,
+                      mapShape: value as "circular" | "rectangular",
+                    }))
+                  }
+                >
+                  <SelectTrigger id="map-shape">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="circular">
+                      Circular — full-bleed, edges crop at poster width
+                    </SelectItem>
+                    <SelectItem value="rectangular">
+                      Rectangular — fill map area, no circular edge
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center justify-between gap-2">
                 <Label>Radius</Label>
                 <Badge variant="outline">{Math.round(config.viewport.radiusMeters)} m</Badge>
@@ -173,40 +251,15 @@ export function EditorApp() {
                 ))}
               </div>
             </div>
-            <Button onClick={() => void generate()} disabled={isBusy}>
+            <Button onClick={() => void generate(locationMode === "coordinates")} disabled={isBusy}>
               {isBusy ? <Spinner className="text-primary-foreground" /> : null}
               Generate poster
             </Button>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </CardContent>
-        </Card>
+          </Card>
 
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle>Preview</CardTitle>
-            <CardDescription>
-              {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex min-h-[520px] items-center justify-center rounded-xl border bg-muted/30 p-4">
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt={`${config.display.city} map poster preview`}
-                  className="max-h-[70vh] w-full max-w-full object-contain shadow-lg"
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-                  <Layers className="size-10 opacity-40" />
-                  <p>Generate a poster to see the live preview.</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="h-fit">
+          <Card className="h-fit">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="size-4" />
@@ -223,28 +276,24 @@ export function EditorApp() {
               </TabsList>
 
               <TabsContent value="themes">
-                <div className="grid grid-cols-2 gap-2">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Each card shows a mini map preview and color chips for background, water, parks,
+                  roads, and label text.
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {themes.map(({ id, theme: item }) => (
-                    <button
+                    <ThemeSwatchCard
                       key={id}
-                      type="button"
-                      className={`rounded-lg border p-3 text-left transition-colors ${
-                        config.themeId === id ? "border-primary bg-accent" : "hover:bg-muted/50"
-                      }`}
-                      onClick={() =>
+                      theme={item}
+                      selected={config.themeId === id}
+                      onSelect={() =>
                         setConfig((current) => ({
                           ...current,
                           themeId: id,
                           customTheme: undefined,
                         }))
                       }
-                    >
-                      <div
-                        className="mb-2 h-8 rounded-md border"
-                        style={{ backgroundColor: item.bg }}
-                      />
-                      <p className="text-sm font-medium">{item.name}</p>
-                    </button>
+                    />
                   ))}
                 </div>
                 <Separator className="my-4" />
@@ -274,6 +323,9 @@ export function EditorApp() {
 
               <TabsContent value="labels">
                 <div className="flex flex-col gap-4">
+                  <p className="text-xs text-muted-foreground">
+                    Poster text synced from Location when using place name. Edit here to override.
+                  </p>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="display-city">Display city</Label>
                     <Input
@@ -301,15 +353,30 @@ export function EditorApp() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="font-family">Google Font family</Label>
-                    <Input
-                      id="font-family"
+                    <Label htmlFor="font-family">Poster font</Label>
+                    <Select
                       value={config.fontFamily}
-                      placeholder="Noto Sans JP"
-                      onChange={(event) =>
-                        setConfig((current) => ({ ...current, fontFamily: event.target.value }))
+                      onValueChange={(value) =>
+                        setConfig((current) => ({ ...current, fontFamily: value }))
                       }
-                    />
+                    >
+                      <SelectTrigger id="font-family">
+                        <SelectValue placeholder="Choose a Google Font" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {POSTER_FONT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                            {option.hint ? ` — ${option.hint}` : ""}
+                          </SelectItem>
+                        ))}
+                        {!isKnownPosterFont(config.fontFamily) ? (
+                          <SelectItem value={config.fontFamily}>
+                            {config.fontFamily} (custom)
+                          </SelectItem>
+                        ) : null}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </TabsContent>
@@ -379,6 +446,32 @@ export function EditorApp() {
                 </div>
               </TabsContent>
             </Tabs>
+          </CardContent>
+        </Card>
+        </div>
+
+        <Card className="flex min-h-0 flex-col lg:min-h-[calc(100vh-8rem)]">
+          <CardHeader>
+            <CardTitle>Preview</CardTitle>
+            <CardDescription>
+              {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-[520px] flex-1 items-center justify-center rounded-xl border bg-muted/30 p-4">
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt={`${config.display.city} map poster preview`}
+                  className="h-full w-auto max-w-full object-contain shadow-lg"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
+                  <Layers className="size-10 opacity-40" />
+                  <p>Generate a poster to see the live preview.</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </main>

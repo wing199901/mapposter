@@ -14,6 +14,7 @@ export interface SerializedPosterState {
   displayCity: string
   displayCountry: string
   fontFamily: string
+  mapShape: PosterConfig["mapShape"]
   widthInches: number
   heightInches: number
 }
@@ -30,6 +31,7 @@ export function serializePosterState(config: PosterConfig): SerializedPosterStat
     displayCity: config.display.city,
     displayCountry: config.display.country,
     fontFamily: config.fontFamily,
+    mapShape: config.mapShape,
     widthInches: config.widthInches,
     heightInches: config.heightInches,
   }
@@ -53,6 +55,7 @@ export function deserializePosterState(state: SerializedPosterState): PosterConf
       country: state.displayCountry,
     },
     fontFamily: state.fontFamily,
+    mapShape: state.mapShape ?? "circular",
     widthInches: state.widthInches,
     heightInches: state.heightInches,
   }

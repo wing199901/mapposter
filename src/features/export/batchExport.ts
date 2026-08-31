@@ -23,6 +23,7 @@ export async function exportPosterPng(
     viewport: config.viewport,
     display: config.display,
     fontFamily: config.fontFamily,
+    mapShape: config.mapShape,
     widthPx,
     heightPx,
     previewScale,
@@ -49,6 +50,7 @@ export async function exportAllThemesZip(
       viewport: config.viewport,
       display: config.display,
       fontFamily: config.fontFamily,
+      mapShape: config.mapShape,
       widthPx,
       heightPx,
     })

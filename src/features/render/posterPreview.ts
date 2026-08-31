@@ -4,6 +4,7 @@ import type { OsmFeature } from "@/lib/types"
 interface PendingPreview {
   resolve: (bitmap: ImageBitmap) => void
   reject: (error: Error) => void
+  timer: number
 }
 
 interface PosterWorkerRequest {
@@ -17,33 +18,45 @@ interface PosterWorkerResponse {
   error?: string
 }
 
+const WORKER_FEATURE_LIMIT = 20_000
+const WORKER_TIMEOUT_MS = 120_000
+
 let worker: Worker | null = null
 let nextRequestId = 0
 const pending = new Map<number, PendingPreview>()
+
+function settlePending(id: number, outcome: "resolve" | "reject", value: ImageBitmap | Error): void {
+  const current = pending.get(id)
+  if (!current) {
+    return
+  }
+
+  pending.delete(id)
+  window.clearTimeout(current.timer)
+  if (outcome === "resolve") {
+    current.resolve(value as ImageBitmap)
+    return
+  }
+
+  current.reject(value as Error)
+}
 
 function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(new URL("./poster.worker.ts", import.meta.url), { type: "module" })
     worker.onmessage = (event: MessageEvent<PosterWorkerResponse>) => {
       const { id, bitmap, error } = event.data
-      const current = pending.get(id)
-      if (!current) {
-        return
-      }
-
-      pending.delete(id)
       if (error || !bitmap) {
-        current.reject(new Error(error ?? "Preview render failed"))
+        settlePending(id, "reject", new Error(error ?? "Preview render failed"))
         return
       }
 
-      current.resolve(bitmap)
+      settlePending(id, "resolve", bitmap)
     }
     worker.onerror = (event) => {
-      for (const current of pending.values()) {
-        current.reject(new Error(event.message || "Preview worker failed"))
+      for (const [id] of pending) {
+        settlePending(id, "reject", new Error(event.message || "Preview worker failed"))
       }
-      pending.clear()
       worker?.terminate()
       worker = null
     }
@@ -52,16 +65,37 @@ function getWorker(): Worker {
   return worker
 }
 
+export function shouldRenderPreviewInWorker(featureCount: number): boolean {
+  return featureCount <= WORKER_FEATURE_LIMIT
+}
+
 export function renderPreviewInWorker(
   input: DrawPosterInput & { features: OsmFeature[] },
 ): Promise<ImageBitmap> {
+  if (!shouldRenderPreviewInWorker(input.features.length)) {
+    return Promise.reject(new Error("Feature set too large for preview worker"))
+  }
+
   const id = nextRequestId
   nextRequestId += 1
 
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject })
+    const timer = window.setTimeout(() => {
+      settlePending(id, "reject", new Error("Preview worker timed out"))
+    }, WORKER_TIMEOUT_MS)
+
+    pending.set(id, { resolve, reject, timer })
     const request: PosterWorkerRequest = { id, input }
-    getWorker().postMessage(request)
+
+    try {
+      getWorker().postMessage(request)
+    } catch (error) {
+      settlePending(
+        id,
+        "reject",
+        error instanceof Error ? error : new Error("Preview worker postMessage failed"),
+      )
+    }
   })
 }
 

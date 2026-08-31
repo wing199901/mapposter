@@ -30,6 +30,8 @@ export interface DisplayLabels {
   country: string
 }
 
+export type MapShape = "circular" | "rectangular"
+
 export interface PosterConfig {
   geocode: GeocodeQuery
   viewport: Viewport
@@ -37,6 +39,7 @@ export interface PosterConfig {
   customTheme?: PosterTheme
   display: DisplayLabels
   fontFamily: string
+  mapShape: MapShape
   widthInches: number
   heightInches: number
 }

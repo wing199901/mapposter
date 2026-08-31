@@ -25,6 +25,7 @@ interface PosterCacheDb extends DBSchema {
 
 const DB_NAME = "mapposter-cache"
 const DB_VERSION = 2
+export const OSM_QUERY_VERSION = 2
 
 let dbPromise: Promise<IDBPDatabase<PosterCacheDb>> | null = null
 
@@ -46,7 +47,7 @@ function getDb() {
 }
 
 export function osmCacheKey(latitude: number, longitude: number, radiusMeters: number): string {
-  return `${latitude.toFixed(5)}:${longitude.toFixed(5)}:${Math.round(radiusMeters)}`
+  return `${latitude.toFixed(5)}:${longitude.toFixed(5)}:${Math.round(radiusMeters)}:v${OSM_QUERY_VERSION}`
 }
 
 export function geocodeCacheKey(query: GeocodeQuery): string {

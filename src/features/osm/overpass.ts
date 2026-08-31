@@ -17,19 +17,35 @@ type OverpassResponse = {
   elements: OverpassElement[]
 }
 
+function highwaySelector(viewport: Viewport): string {
+  const { latitude, longitude, radiusMeters } = viewport
+  const around = `around:${Math.round(radiusMeters)},${latitude},${longitude}`
+
+  if (radiusMeters <= 6000) {
+    return `way["highway"](${around})`
+  }
+
+  if (radiusMeters <= 12000) {
+    return `way["highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street)$"](${around})`
+  }
+
+  return `way["highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$"](${around})`
+}
+
 function buildQuery(viewport: Viewport): string {
   const { latitude, longitude, radiusMeters } = viewport
+  const around = `around:${Math.round(radiusMeters)},${latitude},${longitude}`
 
   return `[out:json][timeout:90];
 (
-  way["highway"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  relation["natural"="water"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  way["natural"="water"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  way["waterway"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  relation["leisure"="park"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  way["leisure"="park"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  way["landuse"="grass"](around:${Math.round(radiusMeters)},${latitude},${longitude});
-  way["landuse"="forest"](around:${Math.round(radiusMeters)},${latitude},${longitude});
+  ${highwaySelector(viewport)};
+  relation["natural"="water"](${around});
+  way["natural"="water"](${around});
+  way["waterway"](${around});
+  relation["leisure"="park"](${around});
+  way["leisure"="park"](${around});
+  way["landuse"="grass"](${around});
+  way["landuse"="forest"](${around});
 );
 out geom;`
 }

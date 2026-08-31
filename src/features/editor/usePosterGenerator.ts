@@ -16,6 +16,7 @@ import {
   renderPreviewInWorker,
   renderPreviewOnMainThread,
   revokePreviewUrl,
+  shouldRenderPreviewInWorker,
 } from "@/features/render/posterPreview"
 import { loadPosterFont } from "@/features/render/typography"
 import { loadTheme } from "@/features/themes/themeRegistry"
@@ -34,6 +35,7 @@ const DEFAULT_CONFIG: PosterConfig = {
   themeId: "terracotta",
   display: { city: "Paris", country: "France" },
   fontFamily: "Roboto",
+  mapShape: "circular",
   widthInches: 12,
   heightInches: 16,
 }
@@ -75,6 +77,7 @@ export function usePosterGenerator() {
         customTheme: config.customTheme,
         display: config.display,
         fontFamily: config.fontFamily,
+        mapShape: config.mapShape,
         viewport: config.viewport,
         widthInches: config.widthInches,
         heightInches: config.heightInches,
@@ -83,6 +86,7 @@ export function usePosterGenerator() {
       config.customTheme,
       config.display,
       config.fontFamily,
+      config.mapShape,
       config.heightInches,
       config.themeId,
       config.viewport,
@@ -107,14 +111,21 @@ export function usePosterGenerator() {
         viewport: nextConfig.viewport,
         display: nextConfig.display,
         fontFamily: nextConfig.fontFamily,
+        mapShape: nextConfig.mapShape,
         widthPx,
         heightPx,
         previewScale: 0.5,
       }
 
       try {
-        const bitmap = await renderPreviewInWorker(input)
-        const nextUrl = await bitmapToObjectUrl(bitmap)
+        if (shouldRenderPreviewInWorker(nextFeatures.length)) {
+          const bitmap = await renderPreviewInWorker(input)
+          const nextUrl = await bitmapToObjectUrl(bitmap)
+          setPreviewObjectUrl(nextUrl)
+          return
+        }
+
+        const nextUrl = await renderPreviewOnMainThread(input)
         setPreviewObjectUrl(nextUrl)
       } catch {
         const nextUrl = await renderPreviewOnMainThread(input)
@@ -174,13 +185,20 @@ export function usePosterGenerator() {
     [],
   )
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (skipGeocode = false) => {
     setError(null)
 
     try {
       let geocodeMessage = "Geocoding city…"
-      const { viewport: resolvedViewport, geocodeCacheHit, skippedGeocode } =
-        await resolveViewport(config)
+      setProgress({ phase: "geocoding", message: geocodeMessage, progress: 0.08 })
+
+      const { viewport: resolvedViewport, geocodeCacheHit, skippedGeocode } = skipGeocode
+        ? {
+            viewport: config.viewport,
+            geocodeCacheHit: false,
+            skippedGeocode: true,
+          }
+        : await resolveViewport(config)
 
       if (skippedGeocode) {
         geocodeMessage = "Using manual coordinates"
@@ -188,7 +206,7 @@ export function usePosterGenerator() {
         geocodeMessage = "Using cached geocode"
       }
 
-      setProgress({ phase: "geocoding", message: geocodeMessage })
+      setProgress({ phase: "geocoding", message: geocodeMessage, progress: 0.12 })
 
       const nextViewport = resolvedViewport
       if (!skippedGeocode) {
@@ -196,8 +214,8 @@ export function usePosterGenerator() {
           ...current,
           viewport: nextViewport,
           display: {
-            city: current.display.city || config.geocode.city,
-            country: current.display.country || config.geocode.country,
+            city: config.geocode.city,
+            country: config.geocode.country,
           },
         }))
       }
@@ -248,7 +266,7 @@ export function usePosterGenerator() {
       throw new Error("Generate a poster before exporting")
     }
 
-    setProgress({ phase: "exporting", message: "Exporting PNG…" })
+    setProgress({ phase: "exporting", message: "Exporting PNG…", progress: 0.92 })
     const blob = await exportPosterPng(config, features)
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
@@ -264,7 +282,7 @@ export function usePosterGenerator() {
       throw new Error("Generate a poster before batch export")
     }
 
-    setProgress({ phase: "exporting", message: "Exporting all themes…" })
+    setProgress({ phase: "exporting", message: "Exporting all themes…", progress: 0.92 })
     const blob = await exportAllThemesZip(config, features)
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
