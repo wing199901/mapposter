@@ -30,13 +30,13 @@ describe("nominatim request helpers", () => {
   })
 
   it("suggests a clamped radius from a place bounding box", () => {
-    // Rough Hong Kong–scale bbox should push toward the max metro radius.
+    // Rough Hong Kong–scale bbox should push toward a large metro / SAR radius.
     const radius = suggestedRadiusFromBoundingBox(
       [22.15, 22.56, 113.83, 114.41],
       22.3,
     )
     expect(radius).toBeGreaterThanOrEqual(10000)
-    expect(radius).toBeLessThanOrEqual(20000)
+    expect(radius).toBeLessThanOrEqual(50000)
   })
 
   it("clamps tiny places up to the minimum radius", () => {

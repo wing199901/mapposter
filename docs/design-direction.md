@@ -2,7 +2,7 @@
 
 Map Poster Studio uses a professional cartographic editor layout:
 
-- Two-column desktop shell: location + style controls (~1/3), dominant preview (~2/3)
+- Two-column desktop shell: location + style controls (~1/2), preview (~1/2)
 - Style panel: Themes and Labels only
 - Export (size presets, custom inches, PNG / all-themes ZIP) lives in a Preview header popover
 - Minimal neutral palette with semantic shadcn tokens

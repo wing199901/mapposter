@@ -3,7 +3,7 @@ export const NOMINATIM_APP_URL = "https://mapposter.wing199901.workers.dev"
 export const NOMINATIM_DEFAULT_CONTACT_EMAIL = "wing199901@users.noreply.github.com"
 
 export const MIN_RADIUS_METERS = 4000
-export const MAX_RADIUS_METERS = 20000
+export const MAX_RADIUS_METERS = 50000
 export const RADIUS_STEP_METERS = 500
 
 export function buildNominatimUserAgent(contactEmail: string): string {

@@ -32,11 +32,17 @@ import { geocodeCity } from "@/features/geocode/nominatim"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
 import type { PosterTheme } from "@/lib/types"
 import { encodePosterState } from "@/lib/urlState"
+import {
+  MAX_RADIUS_METERS,
+  MIN_RADIUS_METERS,
+  RADIUS_STEP_METERS,
+} from "../../../shared/nominatim"
 
 const DISTANCE_HINTS = [
   { range: "4000–6000 m", hint: "Small dense cities" },
   { range: "8000–12000 m", hint: "Medium downtown focus" },
-  { range: "15000–20000 m", hint: "Large metro overview" },
+  { range: "15000–25000 m", hint: "Large metro / regional overview" },
+  { range: "30000–50000 m", hint: "Whole-city / SAR coverage (slow)" },
 ]
 
 export function EditorApp() {
@@ -217,7 +223,7 @@ export function EditorApp() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1600px] gap-4 p-4 lg:grid-cols-[1fr_2fr] lg:p-6">
+      <main className="mx-auto grid max-w-[1600px] gap-4 p-4 lg:grid-cols-2 lg:p-6">
         <div className="flex flex-col gap-4">
           <Card className="h-fit">
           <CardHeader>
@@ -326,21 +332,31 @@ export function EditorApp() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Controls how much OpenStreetMap data is downloaded when you generate. Place name
-                mode auto-sets this from the place size (about 4–20 km). Adjust before Generate if
-                you want a tighter or wider map.
+                mode auto-sets this from the place size (about 4–50 km). Adjust before Generate if
+                you want a tighter or wider map. Radii above about 15–20 km can be slow or fail
+                because Overpass returns a lot of data.
               </p>
               <Slider
-                min={4000}
-                max={20000}
-                step={500}
+                min={MIN_RADIUS_METERS}
+                max={MAX_RADIUS_METERS}
+                step={RADIUS_STEP_METERS}
                 value={[config.viewport.radiusMeters]}
                 onValueChange={([value]) =>
                   setConfig((current) => ({
                     ...current,
-                    viewport: { ...current.viewport, radiusMeters: value ?? 10000 },
+                    viewport: {
+                      ...current.viewport,
+                      radiusMeters: value ?? 10000,
+                    },
                   }))
                 }
               />
+              {config.viewport.radiusMeters > 20000 ? (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Large fetch radius — Generate may take a long time or fail on public Overpass
+                  servers.
+                </p>
+              ) : null}
               <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                 {DISTANCE_HINTS.map((item) => (
                   <p key={item.range}>
