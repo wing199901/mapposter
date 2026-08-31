@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { formatCityLabel, isLatinScript } from "@/lib/scriptDetection"
-import { decodePosterState, deserializePosterState, encodePosterState, type SerializedPosterState } from "@/lib/urlState"
+import { decodePosterState, deserializePosterState, encodePosterState } from "@/lib/urlState"
 import type { PosterConfig } from "@/lib/types"
 import { loadTheme, THEME_IDS } from "@/features/themes/themeRegistry"
 import { roadColor, roadWidth } from "@/features/render/roadStyle"
@@ -12,7 +12,7 @@ const sampleConfig: PosterConfig = {
   themeId: "terracotta",
   display: { city: "Paris", country: "France" },
   fontFamily: "Roboto",
-  mapShape: "circular",
+  centerLocked: false,
   widthInches: 12,
   heightInches: 16,
 }
@@ -51,7 +51,26 @@ describe("url state", () => {
     expect(decoded).toEqual(sampleConfig)
   })
 
-  it("defaults map shape to circular for legacy share links", () => {
+  it("ignores deprecated mapShape on legacy share links", () => {
+    const legacy = {
+      geocodeCity: "Paris",
+      geocodeCountry: "France",
+      latitude: 48.8566,
+      longitude: 2.3522,
+      radiusMeters: 10000,
+      themeId: "terracotta",
+      displayCity: "Paris",
+      displayCountry: "France",
+      fontFamily: "Roboto",
+      mapShape: "circular",
+      widthInches: 12,
+      heightInches: 16,
+    }
+
+    expect(deserializePosterState(legacy)).toEqual(sampleConfig)
+  })
+
+  it("defaults centerLocked to false for legacy share links", () => {
     const legacy = {
       geocodeCity: "Paris",
       geocodeCountry: "France",
@@ -66,6 +85,6 @@ describe("url state", () => {
       heightInches: 16,
     }
 
-    expect(deserializePosterState(legacy as SerializedPosterState).mapShape).toBe("circular")
+    expect(deserializePosterState(legacy).centerLocked).toBe(false)
   })
 })

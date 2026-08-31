@@ -107,7 +107,7 @@ When changing proxy behaviour, update **both** `vite.dev-proxy.ts` and the match
 
 Follow `docs/design-direction.md`:
 
-- **Layout**: Three-column desktop shell — location controls (left), dominant preview (center), style/export (right). `max-w-[1600px]` container.
+- **Layout**: Two-column desktop shell — location + style controls (left ~1/3), dominant preview (right ~2/3). Export (size + downloads) lives in a Preview header popover. `max-w-[1600px]` container.
 - **Tokens**: shadcn semantic tokens in `src/index.css` (`--background`, `--primary`, etc.). Use Tailwind utility classes; avoid hardcoded hex in editor chrome (poster themes are separate).
 - **Components**: Extend `src/components/ui/` (Button, Card, Input, Slider, Tabs, Badge, Spinner, …). Match existing `cva` + `cn()` patterns from `src/lib/utils.ts`.
 - **Icons**: `lucide-react`. Use `data-icon="inline-start"` on icons inside buttons (existing convention).

@@ -1,4 +1,4 @@
-import type { DisplayLabels, MapShape, OsmFeature, PosterTheme, Viewport } from "@/lib/types"
+import type { DisplayLabels, OsmFeature, PosterTheme, Viewport } from "@/lib/types"
 
 import { createProjector, fitToCanvas } from "@/features/render/projection"
 import { roadColor, roadWidth, roadZIndex } from "@/features/render/roadStyle"
@@ -13,7 +13,6 @@ export interface DrawPosterInput {
   viewport: Viewport
   display: DisplayLabels
   fontFamily: string
-  mapShape: MapShape
   widthPx: number
   heightPx: number
   previewScale?: number
@@ -86,7 +85,6 @@ export function drawPoster(canvas: DrawableCanvas, input: DrawPosterInput): void
     viewport,
     display,
     fontFamily,
-    mapShape,
     widthPx,
     heightPx,
     previewScale = 1,
@@ -105,7 +103,7 @@ export function drawPoster(canvas: DrawableCanvas, input: DrawPosterInput): void
 
   const projector = createProjector(viewport)
   const mapHeight = heightPx * 0.78
-  const canvasFit = fitToCanvas(projector, widthPx, mapHeight, mapShape)
+  const canvasFit = fitToCanvas(projector, widthPx, mapHeight)
   const toCanvas = (point: [number, number]) => canvasFit.project(point)
   const roadScale = Math.max(1.5, widthPx / 1200) * previewScale
 
@@ -117,13 +115,6 @@ export function drawPoster(canvas: DrawableCanvas, input: DrawPosterInput): void
       (left, right) =>
         roadZIndex(left.tags.highway) - roadZIndex(right.tags.highway),
     )
-
-  if (canvasFit.clip) {
-    ctx.save()
-    ctx.beginPath()
-    ctx.arc(canvasFit.clip.cx, canvasFit.clip.cy, canvasFit.clip.radius, 0, Math.PI * 2)
-    ctx.clip()
-  }
 
   for (const feature of water) {
     if (feature.geometry.type !== "polygon") {
@@ -158,10 +149,6 @@ export function drawPoster(canvas: DrawableCanvas, input: DrawPosterInput): void
       roadColor(theme, feature.tags.highway),
       roadWidth(feature.tags.highway, roadScale),
     )
-  }
-
-  if (canvasFit.clip) {
-    ctx.restore()
   }
 
   drawGradientFade(ctx, widthPx, heightPx, theme.gradient_color)

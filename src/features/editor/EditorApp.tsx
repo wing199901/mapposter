@@ -1,5 +1,5 @@
-import { Download, Layers, MapPin, Palette, Share2, Sparkles } from "lucide-react"
-import { useMemo, useState } from "react"
+import { Layers, MapPin, Palette, Share2, Sparkles } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { toast, Toaster } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -19,14 +19,16 @@ import { Separator, Textarea } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { EXPORT_PRESETS } from "@/features/export/presets"
 import { isKnownPosterFont, POSTER_FONT_OPTIONS } from "@/features/editor/fontOptions"
 import {
   isGenerationBusy,
   resolveProgressPercent,
 } from "@/features/editor/generationProgress"
+import { ExportPopover } from "@/features/editor/ExportPopover"
+import { PosterPreview } from "@/features/editor/PosterPreview"
 import { ThemeSwatchCard } from "@/features/editor/ThemeSwatchCard"
 import { usePosterGenerator } from "@/features/editor/usePosterGenerator"
+import { geocodeCity } from "@/features/geocode/nominatim"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
 import type { PosterTheme } from "@/lib/types"
 import { encodePosterState } from "@/lib/urlState"
@@ -42,6 +44,7 @@ export function EditorApp() {
     config,
     setConfig,
     theme,
+    features,
     previewUrl,
     progress,
     error,
@@ -53,11 +56,128 @@ export function EditorApp() {
 
   const [themeJson, setThemeJson] = useState("")
   const [locationMode, setLocationMode] = useState<"search" | "coordinates">("search")
+  const [placeCity, setPlaceCity] = useState(config.geocode.city)
+  const [placeCountry, setPlaceCountry] = useState(config.geocode.country)
+  const [placeLookupMessage, setPlaceLookupMessage] = useState<string | null>(null)
+  const [isPlaceLookingUp, setIsPlaceLookingUp] = useState(false)
+  const [mapDataStale, setMapDataStale] = useState(false)
   const themes = useMemo(() => listThemes(), [])
   const isBusy = isGenerationBusy(progress)
   const progressPercent = resolveProgressPercent(progress)
+  const canPanPreview = features.length > 0 && Boolean(previewUrl)
+  const generateDisabled = isBusy || isPlaceLookingUp
+  const generateLabel = isBusy
+    ? progress.message
+    : isPlaceLookingUp
+      ? "Looking up place…"
+      : "Generate poster"
 
   const shareLink = `${window.location.origin}${window.location.pathname}#p=${encodePosterState(config)}`
+
+  useEffect(() => {
+    setPlaceCity(config.geocode.city)
+    setPlaceCountry(config.geocode.country)
+  }, [config.geocode.city, config.geocode.country])
+
+  useEffect(() => {
+    if (progress.phase === "done" && progress.message === "Poster ready") {
+      setMapDataStale(false)
+    }
+  }, [progress.phase, progress.message])
+
+  useEffect(() => {
+    if (locationMode !== "search") {
+      setPlaceLookupMessage(null)
+      setIsPlaceLookingUp(false)
+      return
+    }
+
+    const city = placeCity.trim()
+    const country = placeCountry.trim()
+
+    const syncTimer = window.setTimeout(() => {
+      setConfig((current) => {
+        const placeChanged =
+          current.geocode.city !== placeCity || current.geocode.country !== placeCountry
+        if (
+          !placeChanged &&
+          current.display.city === placeCity &&
+          current.display.country === placeCountry
+        ) {
+          return current
+        }
+
+        return {
+          ...current,
+          // Changing City/Country unlocks auto-center for the next lookup.
+          centerLocked: placeChanged ? false : current.centerLocked,
+          geocode: { city: placeCity, country: placeCountry },
+          display: { city: placeCity, country: placeCountry },
+        }
+      })
+    }, 200)
+
+    if (!city || !country) {
+      setPlaceLookupMessage(null)
+      setIsPlaceLookingUp(false)
+      return () => {
+        window.clearTimeout(syncTimer)
+      }
+    }
+
+    let cancelled = false
+    const lookupTimer = window.setTimeout(() => {
+      void (async () => {
+        setIsPlaceLookingUp(true)
+        setPlaceLookupMessage("Looking up place size…")
+        try {
+          const result = await geocodeCity({ city, country })
+          if (cancelled) {
+            return
+          }
+
+          const suggested = result.suggestedRadiusMeters
+          setConfig((current) => ({
+            ...current,
+            geocode: { city: placeCity, country: placeCountry },
+            display: { city: placeCity, country: placeCountry },
+            viewport: {
+              ...current.viewport,
+              ...(current.centerLocked
+                ? {}
+                : {
+                    latitude: result.latitude,
+                    longitude: result.longitude,
+                  }),
+              radiusMeters: suggested ?? current.viewport.radiusMeters,
+            },
+          }))
+          setPlaceLookupMessage(
+            suggested != null
+              ? `Suggested fetch radius ${Math.round(suggested)} m from place size. Click Generate to download map data.`
+              : "Place found. Click Generate to download map data.",
+          )
+        } catch {
+          if (!cancelled) {
+            setPlaceLookupMessage(
+              "Place lookup failed — check spelling, or use Coordinates.",
+            )
+          }
+        } finally {
+          if (!cancelled) {
+            setIsPlaceLookingUp(false)
+          }
+        }
+      })()
+    }, 700)
+
+    return () => {
+      cancelled = true
+      setIsPlaceLookingUp(false)
+      window.clearTimeout(syncTimer)
+      window.clearTimeout(lookupTimer)
+    }
+  }, [locationMode, placeCity, placeCountry, setConfig])
 
   return (
     <div className="min-h-screen bg-background">
@@ -121,45 +241,38 @@ export function EditorApp() {
 
               <TabsContent value="search" className="flex flex-col gap-4">
                 <p className="text-xs text-muted-foreground">
-                  City and country update poster labels automatically. Coordinates are resolved when
-                  you generate.
+                  Type a city and country — labels and suggested fetch radius update after you pause
+                  typing. Click Generate to download map data.
                 </p>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="city">City</Label>
                   <Input
                     id="city"
-                    value={config.geocode.city}
-                    onChange={(event) => {
-                      const city = event.target.value
-                      setConfig((current) => ({
-                        ...current,
-                        geocode: { ...current.geocode, city },
-                        display: { ...current.display, city },
-                      }))
-                    }}
+                    value={placeCity}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => setPlaceCity(event.target.value)}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="country">Country</Label>
                   <Input
                     id="country"
-                    value={config.geocode.country}
-                    onChange={(event) => {
-                      const country = event.target.value
-                      setConfig((current) => ({
-                        ...current,
-                        geocode: { ...current.geocode, country },
-                        display: { ...current.display, country },
-                      }))
-                    }}
+                    value={placeCountry}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => setPlaceCountry(event.target.value)}
                   />
                 </div>
+                {placeLookupMessage ? (
+                  <p className="text-xs text-muted-foreground">{placeLookupMessage}</p>
+                ) : null}
               </TabsContent>
 
               <TabsContent value="coordinates" className="flex flex-col gap-4">
                 <p className="text-xs text-muted-foreground">
-                  Use this when you already know the center point. Geocoding is skipped; only
-                  latitude, longitude, and radius below are used.
+                  Use this when you already know the center point. Geocoding is skipped; set radius
+                  below before generating.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
@@ -169,15 +282,17 @@ export function EditorApp() {
                       type="number"
                       step="0.0001"
                       value={config.viewport.latitude}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setMapDataStale(features.length > 0)
                         setConfig((current) => ({
                           ...current,
+                          centerLocked: true,
                           viewport: {
                             ...current.viewport,
                             latitude: Number(event.target.value),
                           },
                         }))
-                      }
+                      }}
                     />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -187,15 +302,17 @@ export function EditorApp() {
                       type="number"
                       step="0.0001"
                       value={config.viewport.longitude}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setMapDataStale(features.length > 0)
                         setConfig((current) => ({
                           ...current,
+                          centerLocked: true,
                           viewport: {
                             ...current.viewport,
                             longitude: Number(event.target.value),
                           },
                         }))
-                      }
+                      }}
                     />
                   </div>
                 </div>
@@ -203,34 +320,15 @@ export function EditorApp() {
             </Tabs>
 
             <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="map-shape">Map shape</Label>
-                <Select
-                  value={config.mapShape}
-                  onValueChange={(value) =>
-                    setConfig((current) => ({
-                      ...current,
-                      mapShape: value as "circular" | "rectangular",
-                    }))
-                  }
-                >
-                  <SelectTrigger id="map-shape">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="circular">
-                      Circular — full-bleed, edges crop at poster width
-                    </SelectItem>
-                    <SelectItem value="rectangular">
-                      Rectangular — fill map area, no circular edge
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="flex items-center justify-between gap-2">
-                <Label>Radius</Label>
+                <Label>Fetch radius</Label>
                 <Badge variant="outline">{Math.round(config.viewport.radiusMeters)} m</Badge>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Controls how much OpenStreetMap data is downloaded when you generate. Place name
+                mode auto-sets this from the place size (about 4–20 km). Adjust before Generate if
+                you want a tighter or wider map.
+              </p>
               <Slider
                 min={4000}
                 max={20000}
@@ -251,9 +349,26 @@ export function EditorApp() {
                 ))}
               </div>
             </div>
-            <Button onClick={() => void generate(locationMode === "coordinates")} disabled={isBusy}>
-              {isBusy ? <Spinner className="text-primary-foreground" /> : null}
-              Generate poster
+            <Button
+              className="relative w-full overflow-hidden disabled:opacity-100"
+              onClick={() => void generate(locationMode === "coordinates")}
+              disabled={generateDisabled}
+              aria-busy={generateDisabled}
+            >
+              {isBusy ? (
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 bg-primary-foreground/25 transition-[width] duration-300 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              ) : null}
+              <span className="relative z-10 inline-flex items-center gap-2">
+                {generateDisabled ? <Spinner className="text-primary-foreground" /> : null}
+                <span className="truncate">{generateLabel}</span>
+                {isBusy ? (
+                  <span className="tabular-nums opacity-80">{progressPercent}%</span>
+                ) : null}
+              </span>
             </Button>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </CardContent>
@@ -263,7 +378,7 @@ export function EditorApp() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="size-4" />
-              Style & export
+              Style
             </CardTitle>
             <CardDescription>{theme.description}</CardDescription>
           </CardHeader>
@@ -272,7 +387,6 @@ export function EditorApp() {
               <TabsList>
                 <TabsTrigger value="themes">Themes</TabsTrigger>
                 <TabsTrigger value="labels">Labels</TabsTrigger>
-                <TabsTrigger value="export">Export</TabsTrigger>
               </TabsList>
 
               <TabsContent value="themes">
@@ -380,97 +494,66 @@ export function EditorApp() {
                   </div>
                 </div>
               </TabsContent>
-
-              <TabsContent value="export">
-                <div className="flex flex-col gap-3">
-                  {EXPORT_PRESETS.map((preset) => (
-                    <Button
-                      key={preset.id}
-                      variant="outline"
-                      className="justify-between"
-                      onClick={() =>
-                        setConfig((current) => ({
-                          ...current,
-                          widthInches: preset.widthInches,
-                          heightInches: preset.heightInches,
-                        }))
-                      }
-                    >
-                      <span>{preset.label}</span>
-                      <span className="text-xs text-muted-foreground">{preset.description}</span>
-                    </Button>
-                  ))}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="width">Width (in)</Label>
-                      <Input
-                        id="width"
-                        type="number"
-                        min={1}
-                        max={20}
-                        step={0.1}
-                        value={config.widthInches}
-                        onChange={(event) =>
-                          setConfig((current) => ({
-                            ...current,
-                            widthInches: Number(event.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="height">Height (in)</Label>
-                      <Input
-                        id="height"
-                        type="number"
-                        min={1}
-                        max={20}
-                        step={0.1}
-                        value={config.heightInches}
-                        onChange={(event) =>
-                          setConfig((current) => ({
-                            ...current,
-                            heightInches: Number(event.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <Button onClick={() => void exportCurrent()} disabled={isBusy}>
-                    <Download data-icon="inline-start" />
-                    Download PNG
-                  </Button>
-                  <Button variant="secondary" onClick={() => void exportAllThemes()} disabled={isBusy}>
-                    Download all themes (ZIP)
-                  </Button>
-                </div>
-              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
         </div>
 
         <Card className="flex min-h-0 flex-col lg:min-h-[calc(100vh-8rem)]">
-          <CardHeader>
-            <CardTitle>Preview</CardTitle>
-            <CardDescription>
-              {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <div className="flex flex-col gap-1.5">
+              <CardTitle>Preview</CardTitle>
+              <CardDescription>
+                {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI
+              </CardDescription>
+            </div>
+            <ExportPopover
+              config={config}
+              setConfig={setConfig}
+              featureCount={features.length}
+              isBusy={isBusy}
+              exportCurrent={exportCurrent}
+              exportAllThemes={exportAllThemes}
+            />
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-[520px] flex-1 items-center justify-center rounded-xl border bg-muted/30 p-4">
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt={`${config.display.city} map poster preview`}
-                  className="h-full w-auto max-w-full object-contain shadow-lg"
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-                  <Layers className="size-10 opacity-40" />
-                  <p>Generate a poster to see the live preview.</p>
-                </div>
-              )}
+            <div className="flex min-h-[520px] flex-1 flex-col gap-3">
+              <div className="flex flex-1 items-start justify-center rounded-xl border bg-muted/30 p-4">
+                {previewUrl ? (
+                  <PosterPreview
+                    previewUrl={previewUrl}
+                    alt={`${config.display.city} map poster preview`}
+                    config={config}
+                    canPan={canPanPreview}
+                    onPanCenter={(latitude, longitude) => {
+                      setMapDataStale(true)
+                      setConfig((current) => ({
+                        ...current,
+                        centerLocked: true,
+                        viewport: {
+                          ...current.viewport,
+                          latitude,
+                          longitude,
+                        },
+                      }))
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
+                    <Layers className="size-10 opacity-40" />
+                    <p>Generate a poster to see the live preview.</p>
+                  </div>
+                )}
+              </div>
+              {mapDataStale ? (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  Center moved — Generate to refresh map data
+                </p>
+              ) : canPanPreview ? (
+                <p className="text-xs text-muted-foreground">
+                  Drag the preview to pan the map center. Radius stays the same.
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>

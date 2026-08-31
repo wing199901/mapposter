@@ -35,7 +35,7 @@ const DEFAULT_CONFIG: PosterConfig = {
   themeId: "terracotta",
   display: { city: "Paris", country: "France" },
   fontFamily: "Roboto",
-  mapShape: "circular",
+  centerLocked: false,
   widthInches: 12,
   heightInches: 16,
 }
@@ -77,7 +77,6 @@ export function usePosterGenerator() {
         customTheme: config.customTheme,
         display: config.display,
         fontFamily: config.fontFamily,
-        mapShape: config.mapShape,
         viewport: config.viewport,
         widthInches: config.widthInches,
         heightInches: config.heightInches,
@@ -86,7 +85,6 @@ export function usePosterGenerator() {
       config.customTheme,
       config.display,
       config.fontFamily,
-      config.mapShape,
       config.heightInches,
       config.themeId,
       config.viewport,
@@ -111,7 +109,6 @@ export function usePosterGenerator() {
         viewport: nextConfig.viewport,
         display: nextConfig.display,
         fontFamily: nextConfig.fontFamily,
-        mapShape: nextConfig.mapShape,
         widthPx,
         heightPx,
         previewScale: 0.5,
@@ -152,12 +149,17 @@ export function usePosterGenerator() {
 
       const cacheKey = geocodeCacheKey({ city, country })
       const cached = await readGeocodeCache(cacheKey)
-      if (cached) {
+      if (cached?.suggestedRadiusMeters != null) {
         return {
           viewport: {
             ...currentConfig.viewport,
-            latitude: cached.latitude,
-            longitude: cached.longitude,
+            ...(currentConfig.centerLocked
+              ? {}
+              : {
+                  latitude: cached.latitude,
+                  longitude: cached.longitude,
+                }),
+            radiusMeters: cached.suggestedRadiusMeters,
           },
           geocodeCacheHit: true,
           skippedGeocode: false,
@@ -169,14 +171,21 @@ export function usePosterGenerator() {
         latitude: result.latitude,
         longitude: result.longitude,
         displayName: result.displayName,
+        suggestedRadiusMeters: result.suggestedRadiusMeters,
         fetchedAt: Date.now(),
       })
 
       return {
         viewport: {
           ...currentConfig.viewport,
-          latitude: result.latitude,
-          longitude: result.longitude,
+          ...(currentConfig.centerLocked
+            ? {}
+            : {
+                latitude: result.latitude,
+                longitude: result.longitude,
+              }),
+          radiusMeters:
+            result.suggestedRadiusMeters ?? currentConfig.viewport.radiusMeters,
         },
         geocodeCacheHit: false,
         skippedGeocode: false,
@@ -294,8 +303,14 @@ export function usePosterGenerator() {
   }, [config, features])
 
   useEffect(() => {
-    savePosterState(config)
-    writeStateToLocation(config)
+    const timer = window.setTimeout(() => {
+      savePosterState(config)
+      writeStateToLocation(config)
+    }, 400)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
   }, [config])
 
   useEffect(() => {

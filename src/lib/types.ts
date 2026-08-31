@@ -30,8 +30,6 @@ export interface DisplayLabels {
   country: string
 }
 
-export type MapShape = "circular" | "rectangular"
-
 export interface PosterConfig {
   geocode: GeocodeQuery
   viewport: Viewport
@@ -39,7 +37,8 @@ export interface PosterConfig {
   customTheme?: PosterTheme
   display: DisplayLabels
   fontFamily: string
-  mapShape: MapShape
+  /** When true, place-name lookup will not overwrite lat/lon. */
+  centerLocked: boolean
   widthInches: number
   heightInches: number
 }
@@ -72,6 +71,8 @@ export interface GeocodeResult {
   latitude: number
   longitude: number
   displayName: string
+  /** Suggested OSM fetch radius from place bounding box (place-name geocode). */
+  suggestedRadiusMeters?: number
 }
 
 export type GenerationPhase =

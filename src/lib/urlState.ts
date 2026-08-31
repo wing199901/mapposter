@@ -14,9 +14,11 @@ export interface SerializedPosterState {
   displayCity: string
   displayCountry: string
   fontFamily: string
-  mapShape: PosterConfig["mapShape"]
+  centerLocked?: boolean
   widthInches: number
   heightInches: number
+  /** @deprecated Ignored — rectangular framing only (upstream-compatible). */
+  mapShape?: string
 }
 
 export function serializePosterState(config: PosterConfig): SerializedPosterState {
@@ -31,7 +33,7 @@ export function serializePosterState(config: PosterConfig): SerializedPosterStat
     displayCity: config.display.city,
     displayCountry: config.display.country,
     fontFamily: config.fontFamily,
-    mapShape: config.mapShape,
+    centerLocked: config.centerLocked,
     widthInches: config.widthInches,
     heightInches: config.heightInches,
   }
@@ -55,7 +57,7 @@ export function deserializePosterState(state: SerializedPosterState): PosterConf
       country: state.displayCountry,
     },
     fontFamily: state.fontFamily,
-    mapShape: state.mapShape ?? "circular",
+    centerLocked: state.centerLocked ?? false,
     widthInches: state.widthInches,
     heightInches: state.heightInches,
   }

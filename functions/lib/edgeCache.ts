@@ -10,6 +10,7 @@ export interface EdgeGeocodeResult {
   latitude: number
   longitude: number
   displayName: string
+  suggestedRadiusMeters?: number
   fetchedAt: number
 }
 
