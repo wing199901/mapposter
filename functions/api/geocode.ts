@@ -7,6 +7,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   const { readEdgeGeocode, writeEdgeGeocode } = await import("../lib/edgeCache")
+  const { geocodeFromNominatim } = await import("../lib/nominatim")
 
   const cached = await readEdgeGeocode(context.env, city, country)
   if (cached) {
@@ -20,34 +21,24 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     )
   }
 
-  const query = encodeURIComponent(`${city}, ${country}`)
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-    {
-      headers: {
-        "User-Agent": "mapposter-web/1.0 (Cloudflare Pages; contact@example.com)",
-        Accept: "application/json",
+  const upstream = await geocodeFromNominatim(city, country, context.env)
+  if (!upstream.ok) {
+    const status = upstream.status === 404 ? 404 : 502
+    return Response.json(
+      { error: upstream.error },
+      {
+        status,
+        headers: { "X-Upstream-Status": String(upstream.status) },
       },
+    )
+  }
+
+  await writeEdgeGeocode(context.env, city, country, upstream.result)
+
+  return Response.json(upstream.result, {
+    headers: {
+      "X-Cache": "MISS",
+      "X-Upstream-Status": "200",
     },
-  )
-
-  if (!response.ok) {
-    return Response.json({ error: "Nominatim request failed" }, { status: 502 })
-  }
-
-  const results = (await response.json()) as Array<{ lat: string; lon: string; display_name: string }>
-  const first = results[0]
-  if (!first) {
-    return Response.json({ error: "No results found" }, { status: 404 })
-  }
-
-  const payload = {
-    latitude: Number(first.lat),
-    longitude: Number(first.lon),
-    displayName: first.display_name,
-  }
-
-  await writeEdgeGeocode(context.env, city, country, payload)
-
-  return Response.json(payload, { headers: { "X-Cache": "MISS" } })
+  })
 }

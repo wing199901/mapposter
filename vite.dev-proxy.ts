@@ -6,6 +6,7 @@ import {
   readDevEdgeGeocode,
   writeDevEdgeGeocode,
 } from "./shared/devEdgeGeocodeCache.js"
+import { fetchNominatimGeocode as requestNominatimGeocode } from "./shared/nominatim.js"
 
 const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
@@ -48,38 +49,19 @@ async function proxyOverpassQuery(query: string): Promise<Response> {
 }
 
 async function fetchNominatimGeocode(city: string, country: string) {
-  const query = encodeURIComponent(`${city}, ${country}`)
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-    {
-      headers: {
-        "User-Agent": "mapposter-web/1.0 (local dev)",
-        Accept: "application/json",
-      },
-    },
-  )
-
-  if (!response.ok) {
-    return { status: 502 as const, body: { error: "Nominatim request failed" } }
-  }
-
-  const results = (await response.json()) as Array<{
-    lat: string
-    lon: string
-    display_name: string
-  }>
-  const first = results[0]
-  if (!first) {
-    return { status: 404 as const, body: { error: "No results found" } }
+  const upstream = await requestNominatimGeocode(city, country)
+  if (!upstream.ok) {
+    return {
+      status: (upstream.status === 404 ? 404 : 502) as 404 | 502,
+      upstreamStatus: upstream.status,
+      body: { error: upstream.error },
+    }
   }
 
   return {
     status: 200 as const,
-    body: {
-      latitude: Number(first.lat),
-      longitude: Number(first.lon),
-      displayName: first.display_name,
-    },
+    upstreamStatus: 200,
+    body: upstream.result,
   }
 }
 
@@ -123,6 +105,7 @@ export function devApiProxyPlugin(): Plugin {
           const result = await fetchNominatimGeocode(city, country)
           if (result.status !== 200) {
             res.statusCode = result.status
+            res.setHeader("X-Upstream-Status", String(result.upstreamStatus))
             res.end(JSON.stringify(result.body))
             return
           }
@@ -132,6 +115,7 @@ export function devApiProxyPlugin(): Plugin {
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
           res.setHeader("X-Cache", "MISS")
+          res.setHeader("X-Upstream-Status", "200")
           res.end(JSON.stringify(result.body))
         })()
       })

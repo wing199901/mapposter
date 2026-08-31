@@ -11,6 +11,7 @@ interface KVNamespace {
 
 interface Env {
   PROXY_CACHE: KVNamespace
+  GEOCODE_CONTACT_EMAIL?: string
 }
 
 type PagesFunction<Env = unknown> = (context: {

@@ -8,3 +8,6 @@ directory = "./dist"
 [[kv_namespaces]]
 binding = "PROXY_CACHE"
 id = "f07274bb1e7342518ab07fa4573f1ec2"
+
+[vars]
+GEOCODE_CONTACT_EMAIL = "wing199901@users.noreply.github.com"

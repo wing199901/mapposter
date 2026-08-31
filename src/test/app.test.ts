@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { formatCityLabel, isLatinScript } from "@/lib/scriptDetection"
-import { decodePosterState, deserializePosterState, encodePosterState } from "@/lib/urlState"
+import { decodePosterState, deserializePosterState, encodePosterState, type SerializedPosterState } from "@/lib/urlState"
 import type { PosterConfig } from "@/lib/types"
 import { loadTheme, THEME_IDS } from "@/features/themes/themeRegistry"
 import { roadColor, roadWidth } from "@/features/render/roadStyle"
@@ -66,6 +66,6 @@ describe("url state", () => {
       heightInches: 16,
     }
 
-    expect(deserializePosterState(legacy).mapShape).toBe("circular")
+    expect(deserializePosterState(legacy as SerializedPosterState).mapShape).toBe("circular")
   })
 })
