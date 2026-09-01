@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test"
 
 const mockGeocode = {
-  latitude: 48.8566,
-  longitude: 2.3522,
-  displayName: "Paris, France",
-  suggestedRadiusMeters: 10000,
+  latitude: 22.2644,
+  longitude: 114.1912,
+  displayName: "香港島 Hong Kong Island, 香港 Hong Kong, 中国",
+  suggestedRadiusMeters: 12000,
   osmType: "relation",
-  osmId: 7444,
+  osmId: 22000550,
 }
 
 const mockBoundary = {
@@ -14,11 +14,11 @@ const mockBoundary = {
     type: "Polygon",
     coordinates: [
       [
-        [2.25, 48.8],
-        [2.45, 48.8],
-        [2.45, 48.92],
-        [2.25, 48.92],
-        [2.25, 48.8],
+        [114.1, 22.2],
+        [114.26, 22.2],
+        [114.26, 22.29],
+        [114.1, 22.29],
+        [114.1, 22.2],
       ],
     ],
   },
@@ -73,12 +73,12 @@ test.describe("Map Poster Studio", () => {
     await expect(page.getByLabel("Height (in)")).toHaveValue("3.6")
   })
 
-  test("shows place lookup hint after geocode", async ({ page }) => {
+  test("shows place lookup hint after Hong Kong Island geocode", async ({ page }) => {
     await mockGeocodeApi(page)
     await page.goto("/")
 
-    await page.getByLabel("City").fill("Paris")
-    await page.getByLabel("Country").fill("France")
+    await page.getByLabel("City").fill("Hong Kong Island")
+    await page.getByLabel("Country").fill("Hong Kong")
 
     await expect(
       page.getByText(/Suggested map radius \d+ m from place size|Place found\. The preview updates live/i),
