@@ -1,10 +1,11 @@
 import type { Map } from "maplibre-gl"
 import JSZip from "jszip"
 
+import { withExportMapSize } from "@/features/export/exportMapSize"
 import {
+  buildPosterPngFromMapCanvas,
   buildPosterSvg,
   posterLayoutFromInches,
-  svgStringToPngBlob,
   svgToBlob,
   type BuildPosterSvgOptions,
 } from "@/features/export/svgExport"
@@ -59,16 +60,17 @@ export async function exportPosterPng(
   await waitForMapIdle(map)
   const theme = loadTheme(config.themeId, config.customTheme)
   const layout = posterLayoutFromInches(config.widthInches, config.heightInches)
-  const svg = buildPosterSvg(
-    map,
-    theme,
-    config.viewport,
-    config.display,
-    config.fontFamily,
-    layout,
-    buildSvgOptions(config, boundaryGeometry),
+  return withExportMapSize(map, layout, config.viewport, () =>
+    buildPosterPngFromMapCanvas(
+      map,
+      theme,
+      config.viewport,
+      config.display,
+      config.fontFamily,
+      layout,
+      buildSvgOptions(config, boundaryGeometry),
+    ),
   )
-  return svgStringToPngBlob(svg, layout.widthPx, layout.heightPx)
 }
 
 export async function exportAllThemesZip(
@@ -93,7 +95,17 @@ export async function exportAllThemesZip(
       svgOptions,
     )
     zip.file(`${city}_${themeId}.svg`, svg)
-    const png = await svgStringToPngBlob(svg, layout.widthPx, layout.heightPx)
+    const png = await withExportMapSize(map, layout, config.viewport, () =>
+      buildPosterPngFromMapCanvas(
+        map,
+        theme,
+        config.viewport,
+        config.display,
+        config.fontFamily,
+        layout,
+        svgOptions,
+      ),
+    )
     zip.file(`${city}_${themeId}.png`, png)
   }
 

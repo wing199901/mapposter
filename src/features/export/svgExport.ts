@@ -1,12 +1,20 @@
+import { outsideBoundaryMaskPath } from "@/features/boundary/projectBoundaryToScreen"
 import type { Feature, GeoJsonProperties, Geometry } from "geojson"
 import type { Map } from "maplibre-gl"
 
-import { buildInvertedMask } from "@/features/boundary/buildInvertedMask"
 import { formatCityLabel, formatCoordinates } from "@/lib/scriptDetection"
 import type { DisplayLabels, PosterLayerVisibility, PosterTheme, Viewport } from "@/lib/types"
 import { DPI } from "@/lib/types"
 
-import { EXPORT_ATTRIBUTION, MAP_BAND_HEIGHT_RATIO } from "@/features/tiles/constants"
+import { EXPORT_ATTRIBUTION, MAP_BAND_HEIGHT_RATIO, POSTER_FADE_TOP_HEIGHT } from "@/features/tiles/constants"
+import {
+  POSTER_ATTRIBUTION_FROM_RIGHT,
+  posterTypographyLayout,
+} from "@/features/tiles/posterTypographyLayout"
+import {
+  posterVignetteSvgDefs,
+  posterVignetteSvgRects,
+} from "@/features/tiles/posterVignette"
 import { mapFeatureLayerIds } from "@/features/tiles/themeToMapStyle"
 
 export interface PosterLayout {
@@ -87,6 +95,164 @@ function geometryToPaths(map: Map, geometry: Geometry): string[] {
   return []
 }
 
+function hexWithAlpha(hex: string, alpha: number): string {
+  const channel = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+    .toString(16)
+    .padStart(2, "0")
+  return `${hex}${channel}`
+}
+
+function drawPosterVignette(
+  ctx: CanvasRenderingContext2D,
+  layout: PosterLayout,
+  theme: PosterTheme,
+  fadeBottomStart: number,
+): void {
+  const { widthPx, heightPx } = layout
+  const bottomTop = heightPx * fadeBottomStart
+  const bottomGrad = ctx.createLinearGradient(0, bottomTop, 0, heightPx)
+  bottomGrad.addColorStop(0, hexWithAlpha(theme.gradient_color, 0))
+  bottomGrad.addColorStop(1, theme.gradient_color)
+  ctx.fillStyle = bottomGrad
+  ctx.fillRect(0, bottomTop, widthPx, heightPx - bottomTop)
+
+  const topHeight = heightPx * POSTER_FADE_TOP_HEIGHT
+  const topGrad = ctx.createLinearGradient(0, 0, 0, topHeight)
+  topGrad.addColorStop(0, hexWithAlpha(theme.gradient_color, 0.9))
+  topGrad.addColorStop(1, hexWithAlpha(theme.gradient_color, 0))
+  ctx.fillStyle = topGrad
+  ctx.fillRect(0, 0, widthPx, topHeight)
+}
+
+function drawPosterTypography(
+  ctx: CanvasRenderingContext2D,
+  layout: PosterLayout,
+  theme: PosterTheme,
+  viewport: Viewport,
+  display: DisplayLabels,
+  fontFamily: string,
+): void {
+  const { widthPx, heightPx } = layout
+  const city = formatCityLabel(display.city)
+  const country = display.country
+  const coords = formatCoordinates(viewport.latitude, viewport.longitude)
+  const fontStack = `${fontFamily}, Roboto, system-ui, sans-serif`
+  const typography = posterTypographyLayout(widthPx, heightPx)
+  const { fonts, lineWidth, fromBottom } = typography
+  const y = (fromBottomFraction: number) => heightPx * (1 - fromBottomFraction)
+
+  ctx.fillStyle = theme.text
+  ctx.textAlign = "center"
+  ctx.textBaseline = "alphabetic"
+
+  ctx.font = `700 ${fonts.city}px ${fontStack}`
+  ctx.fillText(city, widthPx / 2, y(fromBottom.city))
+
+  ctx.strokeStyle = theme.text
+  ctx.globalAlpha = 0.8
+  ctx.lineWidth = lineWidth
+  ctx.beginPath()
+  ctx.moveTo(widthPx * 0.35, y(fromBottom.line))
+  ctx.lineTo(widthPx * 0.65, y(fromBottom.line))
+  ctx.stroke()
+  ctx.globalAlpha = 1
+
+  ctx.font = `500 ${fonts.country}px ${fontStack}`
+  ctx.fillText(country, widthPx / 2, y(fromBottom.country))
+
+  ctx.font = `400 ${fonts.coordinates}px ${fontStack}`
+  ctx.globalAlpha = 0.8
+  ctx.fillText(coords, widthPx / 2, y(fromBottom.coordinates))
+  ctx.globalAlpha = 1
+
+  ctx.font = `400 ${fonts.attribution}px ${fontStack}`
+  ctx.globalAlpha = 0.5
+  ctx.textAlign = "right"
+  ctx.fillText(
+    EXPORT_ATTRIBUTION,
+    widthPx * (1 - POSTER_ATTRIBUTION_FROM_RIGHT),
+    y(fromBottom.attribution),
+  )
+  ctx.globalAlpha = 1
+}
+
+/** Raster export from the live MapLibre canvas so PNG matches preview (water, roads, zoom). */
+export async function buildPosterPngFromMapCanvas(
+  map: Map,
+  theme: PosterTheme,
+  viewport: Viewport,
+  display: DisplayLabels,
+  fontFamily: string,
+  layout: PosterLayout,
+  options: BuildPosterSvgOptions = {},
+): Promise<Blob> {
+  map.triggerRepaint()
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+
+  const mapCanvas = map.getCanvas()
+  const mapCssWidth = map.getContainer().clientWidth
+  const mapCssHeight = map.getContainer().clientHeight
+  const scaleX = layout.widthPx / mapCssWidth
+  const scaleY = layout.mapHeightPx / mapCssHeight
+
+  const canvas = document.createElement("canvas")
+  canvas.width = layout.widthPx
+  canvas.height = layout.heightPx
+  const ctx = canvas.getContext("2d")
+  if (!ctx) {
+    throw new Error("Canvas not supported")
+  }
+
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = "high"
+
+  ctx.fillStyle = theme.bg
+  ctx.fillRect(0, 0, layout.widthPx, layout.heightPx)
+
+  ctx.drawImage(
+    mapCanvas,
+    0,
+    0,
+    mapCanvas.width,
+    mapCanvas.height,
+    0,
+    0,
+    layout.widthPx,
+    layout.mapHeightPx,
+  )
+
+  if (options.boundaryMaskEnabled && options.boundaryGeometry) {
+    const maskPath = new Path2D(outsideBoundaryMaskPath(map, options.boundaryGeometry))
+    ctx.save()
+    ctx.scale(scaleX, scaleY)
+    ctx.fillStyle = theme.bg
+    ctx.fill(maskPath, "evenodd")
+    ctx.restore()
+  }
+
+  const typography = posterTypographyLayout(layout.widthPx, layout.heightPx)
+  drawPosterVignette(ctx, layout, theme, typography.fadeBottomStart)
+  drawPosterTypography(ctx, layout, theme, viewport, display, fontFamily)
+
+  return canvasToPngBlob(canvas)
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("PNG export failed"))
+        return
+      }
+      resolve(blob)
+    }, "image/png")
+  })
+}
+
 function escapeXml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -107,13 +273,17 @@ function typographySvg(
   const country = display.country
   const coords = formatCoordinates(viewport.latitude, viewport.longitude)
   const fontStack = `${fontFamily}, Roboto, system-ui, sans-serif`
+  const typography = posterTypographyLayout(widthPx, heightPx)
+  const { fonts, lineWidth, fromBottom } = typography
+
+  const y = (fromBottomFraction: number) => heightPx * (1 - fromBottomFraction)
 
   return `
-    <text x="${widthPx / 2}" y="${heightPx * 0.86}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${Math.round(widthPx * 0.055)}" font-weight="700" text-anchor="middle">${escapeXml(city)}</text>
-    <line x1="${widthPx * 0.35}" y1="${heightPx * 0.875}" x2="${widthPx * 0.65}" y2="${heightPx * 0.875}" stroke="${theme.text}" stroke-width="${Math.max(1, widthPx * 0.0015)}" />
-    <text x="${widthPx / 2}" y="${heightPx * 0.905}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${Math.round(widthPx * 0.028)}" font-weight="500" text-anchor="middle">${escapeXml(country)}</text>
-    <text x="${widthPx / 2}" y="${heightPx * 0.935}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${Math.round(widthPx * 0.018)}" font-weight="400" text-anchor="middle">${escapeXml(coords)}</text>
-    <text x="${widthPx * 0.97}" y="${heightPx * 0.975}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${Math.round(widthPx * 0.012)}" font-weight="400" text-anchor="end">${escapeXml(EXPORT_ATTRIBUTION)}</text>
+    <text x="${widthPx / 2}" y="${y(fromBottom.city)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.city}" font-weight="700" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(city)}</text>
+    <line x1="${widthPx * 0.35}" y1="${y(fromBottom.line)}" x2="${widthPx * 0.65}" y2="${y(fromBottom.line)}" stroke="${theme.text}" stroke-width="${lineWidth}" />
+    <text x="${widthPx / 2}" y="${y(fromBottom.country)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.country}" font-weight="500" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(country)}</text>
+    <text x="${widthPx / 2}" y="${y(fromBottom.coordinates)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.coordinates}" font-weight="400" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(coords)}</text>
+    <text x="${widthPx * (1 - POSTER_ATTRIBUTION_FROM_RIGHT)}" y="${y(fromBottom.attribution)}" fill="${theme.text}" fill-opacity="0.5" font-family="${escapeXml(fontStack)}" font-size="${fonts.attribution}" font-weight="400" text-anchor="end" dominant-baseline="alphabetic">${escapeXml(EXPORT_ATTRIBUTION)}</text>
   `
 }
 
@@ -126,8 +296,8 @@ export function buildPosterSvg(
   layout: PosterLayout,
   options: BuildPosterSvgOptions = {},
 ): string {
-  const mapWidth = map.getCanvas().width
-  const mapHeight = map.getCanvas().height
+  const mapWidth = map.getContainer().clientWidth
+  const mapHeight = map.getContainer().clientHeight
   const scaleX = layout.widthPx / mapWidth
   const scaleY = layout.mapHeightPx / mapHeight
 
@@ -151,37 +321,33 @@ export function buildPosterSvg(
     const isLine = layerId.startsWith("road") || layerId === "waterway"
     const strokeWidth = strokeWidthForLayer(layerId)
     const paint = isLine
-      ? `fill="none" stroke="${themeForLayer(theme, layerId)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`
+      ? `fill="none" stroke="${themeForLayer(theme, layerId)}" stroke-width="${(strokeWidth / scaleX).toFixed(3)}" stroke-linecap="round" stroke-linejoin="round"`
       : `fill="${themeForLayer(theme, layerId)}" stroke="none"`
     groups.push(
       `<g id="${layerId}" transform="scale(${scaleX} ${scaleY})">${paths.map((path) => `<path d="${path}" ${paint} />`).join("")}</g>`,
     )
   }
 
+  let mapContent = groups.join("")
+
   if (options.boundaryMaskEnabled && options.boundaryGeometry) {
-    const maskGeometry = buildInvertedMask(options.boundaryGeometry)
-    const maskPaths = geometryToPaths(map, maskGeometry)
-    if (maskPaths.length > 0) {
-      groups.push(
-        `<g id="boundary-mask" transform="scale(${scaleX} ${scaleY})">${maskPaths.map((path) => `<path d="${path}" fill="${theme.bg}" stroke="none" />`).join("")}</g>`,
-      )
-    }
+    const maskPathData = outsideBoundaryMaskPath(map, options.boundaryGeometry)
+    mapContent += `<g id="boundary-mask" transform="scale(${scaleX} ${scaleY})"><path d="${maskPathData}" fill="${theme.bg}" fill-rule="evenodd" stroke="none" /></g>`
   }
+
+  const typography = posterTypographyLayout(layout.widthPx, layout.heightPx)
 
   const gradient = `
     <defs>
-      <linearGradient id="poster-fade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${theme.gradient_color}" stop-opacity="0" />
-        <stop offset="100%" stop-color="${theme.gradient_color}" stop-opacity="1" />
-      </linearGradient>
+      ${posterVignetteSvgDefs(theme.gradient_color)}
     </defs>
-    <rect x="0" y="${layout.mapHeightPx * 0.45}" width="${layout.widthPx}" height="${layout.heightPx - layout.mapHeightPx * 0.45}" fill="url(#poster-fade)" />
+    ${posterVignetteSvgRects(layout.widthPx, layout.heightPx, typography.fadeBottomStart)}
   `
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx}" height="${layout.heightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}">
   <rect width="100%" height="100%" fill="${theme.bg}" />
-  <g transform="translate(0, 0)">${groups.join("")}</g>
+  <g transform="translate(0, 0)">${mapContent}</g>
   ${gradient}
   ${typographySvg(layout, theme, viewport, display, fontFamily)}
 </svg>`
@@ -191,6 +357,8 @@ function strokeWidthForLayer(layerId: string): number {
   switch (layerId) {
     case "road-motorway":
       return 4
+    case "road-bridge-deck":
+      return 3.2
     case "road-ferry":
       return 1.4
     case "road-primary":
@@ -211,6 +379,7 @@ function strokeWidthForLayer(layerId: string): number {
 function themeForLayer(theme: PosterTheme, layerId: string): string {
   switch (layerId) {
     case "water":
+    case "water-detail":
     case "waterway":
       return theme.water
     case "parks":
@@ -219,6 +388,7 @@ function themeForLayer(theme: PosterTheme, layerId: string): string {
     case "buildings":
       return theme.buildings
     case "road-motorway":
+    case "road-bridge-deck":
       return theme.road_motorway
     case "road-ferry":
       return theme.road_default
