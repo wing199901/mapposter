@@ -6,12 +6,43 @@ export interface PosterTheme {
   gradient_color: string
   water: string
   parks: string
+  buildings: string
   road_motorway: string
   road_primary: string
   road_secondary: string
   road_tertiary: string
   road_residential: string
   road_default: string
+}
+
+export interface PosterLayerVisibility {
+  water: boolean
+  waterway: boolean
+  parks: boolean
+  buildings: boolean
+  roadMotorway: boolean
+  roadPrimary: boolean
+  roadSecondary: boolean
+  roadTertiary: boolean
+  roadResidential: boolean
+  roadDefault: boolean
+  rail: boolean
+  shipRoutes: boolean
+}
+
+export const DEFAULT_LAYER_VISIBILITY: PosterLayerVisibility = {
+  water: true,
+  waterway: true,
+  parks: true,
+  buildings: false,
+  roadMotorway: true,
+  roadPrimary: true,
+  roadSecondary: true,
+  roadTertiary: true,
+  roadResidential: true,
+  roadDefault: true,
+  rail: true,
+  shipRoutes: true,
 }
 
 export interface Viewport {
@@ -41,6 +72,24 @@ export interface PosterConfig {
   centerLocked: boolean
   widthInches: number
   heightInches: number
+  layerVisibility: PosterLayerVisibility
+  /** When true, hide map features outside the geocoded place admin boundary. */
+  boundaryMaskEnabled: boolean
+  /** OSM reference from the last successful place geocode (for boundary lookup). */
+  placeOsmType?: OsmType
+  placeOsmId?: number
+}
+
+export type OsmType = "node" | "way" | "relation"
+
+export interface GeocodeResult {
+  latitude: number
+  longitude: number
+  displayName: string
+  /** Suggested map radius from place bounding box (place-name geocode). */
+  suggestedRadiusMeters?: number
+  osmType?: OsmType
+  osmId?: number
 }
 
 export interface ExportPreset {
@@ -51,50 +100,19 @@ export interface ExportPreset {
   description: string
 }
 
-export type OsmGeometry =
-  | { type: "line"; coordinates: Array<[number, number]> }
-  | { type: "polygon"; coordinates: Array<[number, number]> }
+export type ExportPhase = "idle" | "exporting" | "done" | "error"
 
-export interface OsmFeature {
-  id: string
-  layer: "water" | "parks" | "roads"
-  geometry: OsmGeometry
-  tags: Record<string, string>
-}
-
-export interface OsmBundle {
-  features: OsmFeature[]
-  fetchedAt: number
-}
-
-export interface GeocodeResult {
-  latitude: number
-  longitude: number
-  displayName: string
-  /** Suggested OSM fetch radius from place bounding box (place-name geocode). */
-  suggestedRadiusMeters?: number
-}
-
-export type GenerationPhase =
-  | "idle"
-  | "geocoding"
-  | "fetching"
-  | "rendering"
-  | "exporting"
-  | "done"
-  | "error"
-
-export interface GenerationProgress {
-  phase: GenerationPhase
+export interface ExportProgress {
+  phase: ExportPhase
   message: string
   progress?: number
 }
 
-export interface PosterRenderResult {
-  previewDataUrl: string
-  widthPx: number
-  heightPx: number
-}
+/** @deprecated Use ExportProgress */
+export type GenerationProgress = ExportProgress
+
+/** @deprecated Live map replaces explicit generation phases */
+export type GenerationPhase = ExportPhase
 
 export const DPI = 300
 export const MAX_INCHES = 20

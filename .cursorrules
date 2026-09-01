@@ -10,7 +10,7 @@
 **Authoritative sources (check in this order when the user asks for something new):**
 
 1. **`.cursorrules`** (this file) — non-negotiable invariants, rendering contracts, API proxy rules, UI direction.
-2. **`docs/adr/`** — architecture decision records (e.g. client-side Canvas rendering on Cloudflare Pages).
+2. **`docs/adr/`** — architecture decision records (e.g. MapLibre vector tiles, client-side rendering on Cloudflare Pages).
 3. **`docs/design-direction.md`** — editor layout, visual tone, component composition.
 4. **`README.md`** — stack, scripts, deployment, feature overview.
 
@@ -30,7 +30,7 @@ When the user requests a **new feature**, **behavior change**, or **non-trivial 
 ## 🎯 Project Overview & Architecture
 
 - **Product**: Browser-based map poster generator inspired by [originalankur/maptoposter](https://github.com/originalankur/maptoposter). Renders entirely client-side; deploys to **Cloudflare Pages**.
-- **Stack**: Vite 8 + React 19 + TypeScript 6 + Tailwind CSS v4 + shadcn-style UI (`src/components/ui/`) + Canvas 2D at **300 DPI**.
+- **Stack**: Vite 8 + React 19 + TypeScript 6 + Tailwind CSS v4 + shadcn-style UI (`src/components/ui/`) + MapLibre GL + vector SVG export at **300 DPI**.
 - **Lint / test**: oxlint (`npm run lint`), Vitest (`npm run test`), Playwright e2e (`npm run test:e2e`).
 - **Path alias**: `@/` → `src/` (configured in `vite.config.ts`).
 
@@ -38,70 +38,72 @@ When the user requests a **new feature**, **behavior change**, or **non-trivial 
 
 | Path | Purpose |
 |------|---------|
-| `src/features/editor/` | `EditorApp`, `usePosterGenerator` — orchestration hook |
-| `src/features/render/` | Canvas drawing (`drawPoster`), projection, road styles, typography |
-| `src/features/osm/` | Overpass query builder, feature parsing, IndexedDB cache |
-| `src/features/geocode/` | Nominatim client (via `/api/geocode` proxy) |
+| `src/features/editor/` | `EditorApp`, `usePosterGenerator`, `ExportPopover` — orchestration |
+| `src/features/tiles/` | MapLibre preview, `themeToMapStyle`, viewport ↔ zoom |
+| `src/features/geocode/` | Nominatim client + IndexedDB geocode cache (via `/api/geocode` proxy) |
 | `src/features/themes/` | `themeRegistry` — built-in theme lookup and custom theme merge |
-| `src/features/export/` | PNG export, batch ZIP, size presets |
+| `src/features/export/` | SVG/PNG export, batch ZIP, size presets |
 | `src/themes/` | 17 built-in theme JSON files (upstream-ported palette) |
 | `src/lib/` | Shared types (`types.ts`), URL/localStorage state (`urlState.ts`), utils |
 | `src/components/ui/` | Reusable shadcn-style primitives — extend here, do not duplicate |
-| `functions/api/` | Cloudflare Pages Functions — production API proxies |
+| `functions/api/` | Cloudflare Pages Functions — geocode and boundary proxies |
 | `vite.dev-proxy.ts` | Dev-server middleware mirroring `functions/api/` |
-| `e2e/` | Playwright specs with mocked `/api/geocode` and `/api/overpass` |
+| `e2e/` | Playwright specs with mocked `/api/geocode` |
 
 ### Feature modules
 
-Keep domain logic in `src/features/<domain>/`. UI composition lives in `EditorApp.tsx` or future feature components — do not put render/OSM/geocode logic inline in JSX.
+Keep domain logic in `src/features/<domain>/`. UI composition lives in `EditorApp.tsx` or future feature components — do not put tile styling/geocode logic inline in JSX.
 
-## 🖼️ Rendering Pipeline Invariants
+## 🖼️ Rendering Pipeline Invariants (ADR 0003)
 
-1. **Client-side only**: All poster drawing happens in the browser via Canvas 2D. No server-side rendering, no Python/matplotlib, no image API round trips for generation.
-2. **300 DPI export**: `DPI = 300` in `src/lib/types.ts`. Pixel size = `Math.round(inches × DPI)`. Preview uses a smaller canvas (`previewScale`); export uses full resolution.
-3. **Size limits**: `MAX_INCHES = 20`. Clamp width/height via `clampInches()` in `src/features/export/presets.ts`.
-4. **Draw order** (do not reorder without visual review): background → gradient fade → water polygons → park polygons → roads (sorted by `roadZIndex`) → typography labels.
-5. **Projection**: Lat/lon → canvas via `createProjector` / `fitToCanvas` in `src/features/render/projection.ts`. Viewport is a circle defined by `latitude`, `longitude`, `radiusMeters`.
-6. **Road classification**: Colors and widths come from `roadStyle.ts` using `highway` tag → `PosterTheme` road color keys (`road_motorway` … `road_residential`, `road_default` fallback).
-7. **OSM layers**: `OsmFeature.layer` is one of `water` | `parks` | `roads`. Overpass query in `overpass.ts` fetches highways, water (ways/relations), waterways, parks, grass, forest within `radiusMeters`.
-8. **Fonts**: Load via Google Fonts in `typography.ts` before drawing. `scriptDetection.ts` picks CJK-capable fallbacks when labels contain non-Latin scripts.
-9. **Web Worker**: ADR 0001 mentions Workers for off-main-thread rendering; current implementation draws on the main thread. Introduce a Worker only with an ADR update and measurable perf need — do not assume one exists.
+1. **Client-side only**: All poster rendering happens in the browser via MapLibre GL + SVG export. No server-side rendering, no Python/matplotlib, no image API round trips for generation.
+2. **Live preview**: MapLibre map in the preview panel — no Generate button. Pan/zoom updates `viewport` (lat, lon, radiusMeters).
+3. **300 DPI export**: `DPI = 300` in `src/lib/types.ts`. Pixel size = `Math.round(inches × DPI)`. Export builds vector SVG then rasterizes PNG when needed.
+4. **Size limits**: `MAX_INCHES = 20`. Clamp width/height via `clampInches()` in `src/features/export/presets.ts`.
+5. **Tiles**: OpenFreeMap vector tiles via TileJSON (`OPENFREEMAP_TILEJSON` in `constants.ts`) — never hardcode `{z}/{x}/{y}.pbf` (returns empty tiles).
+6. **Layers**: Roads, water, parks, optional buildings — per-layer toggles (ADR 0004). Style in `themeToMapStyle.ts`.
+7. **Draw order** (MapLibre layer stack): background → water → waterway → parks → buildings (optional) → roads → rail → ferry → boundary mask (optional, top).
+8. **Typography**: HTML overlay in preview; SVG `<text>` in export. `scriptDetection.ts` formats city labels and coordinates.
+9. **Attribution**: Exports include `© OpenStreetMap contributors · OpenMapTiles` (see `EXPORT_ATTRIBUTION`).
 
 ## 🎨 Theme System
 
-- **Schema**: `PosterTheme` in `src/lib/types.ts` — `name`, `description`, `bg`, `text`, `gradient_color`, `water`, `parks`, and six `road_*` color keys. All values are CSS hex strings.
+- **Schema**: `PosterTheme` in `src/lib/types.ts` — `name`, `description`, `bg`, `text`, `gradient_color`, `water`, `parks`, `buildings`, and six `road_*` color keys. All values are CSS hex strings.
 - **Built-in themes**: JSON files in `src/themes/`. Register new themes in `themeRegistry.ts` (import + `THEME_REGISTRY` entry). Keep filenames `snake_case.json`.
 - **Custom themes**: Runtime override via `PosterConfig.customTheme`; merged over `DEFAULT_THEME` in `loadTheme()`. Theme JSON editor in UI serializes/deserializes this object.
-- **Do not** change theme key names without updating `drawPoster.ts`, `roadStyle.ts`, and all JSON theme files in the same change set.
+- **Do not** change theme key names without updating `themeToMapStyle.ts`, `svgExport.ts`, and all JSON theme files in the same change set.
 
 ## 🌐 API Proxies (dev + production must stay in sync)
 
-External geocoding and Overpass calls **must** go through app proxies — never call Nominatim or Overpass directly from browser production code (CORS and rate-limit policy).
+Nominatim geocoding **must** go through the app proxy — never call Nominatim directly from browser production code (CORS and rate-limit policy).
 
 | Route | Method | Dev | Production |
 |-------|--------|-----|------------|
 | `/api/geocode` | GET | `vite.dev-proxy.ts` | `functions/api/geocode.ts` |
-| `/api/overpass` | POST `{ query }` | `vite.dev-proxy.ts` | `functions/api/overpass.ts` |
+| `/api/boundary` | GET | `vite.dev-proxy.ts` | `functions/api/boundary.ts` |
 
-**Geocode**: `?city=…&country=…` → Nominatim search (with optional KV edge cache), returns `{ latitude, longitude, displayName }` and `X-Cache: HIT|MISS`. Errors: 400 (missing params), 404 (no results), 502 (upstream failure).
+**Geocode**: `?city=…&country=…` → Nominatim search (with optional KV edge cache), returns `{ latitude, longitude, displayName, suggestedRadiusMeters?, osmType?, osmId? }` and `X-Cache: HIT|MISS`. Errors: 400 (missing params), 404 (no results), 502 (upstream failure).
 
-**Overpass**: POST JSON body with `query` string → fan-out to multiple public endpoints (`OVERPASS_ENDPOINTS`), return first success. Errors: 400 (invalid/missing query), 502 (all endpoints failed).
+**Boundary**: `?osmType=…&osmId=…` → Nominatim lookup GeoJSON polygon (with optional KV edge cache). Errors: 400, 404 (no polygon), 502.
+
+Vector tiles (OpenFreeMap) are fetched directly from the browser — not proxied. A future tile proxy requires a new ADR.
 
 When changing proxy behaviour, update **both** `vite.dev-proxy.ts` and the matching `functions/api/*.ts` file in the same change set. Geocode KV keys must use [`shared/proxyCacheKeys.ts`](shared/proxyCacheKeys.ts). Keep `User-Agent` strings consistent (`mapposter-web/1.0`).
 
 ## 💾 State & Persistence
 
 - **Shareable URL**: Hash fragment `#p=<base64 JSON>` via `encodePosterState` / `decodePosterState` in `urlState.ts`. Hash wins over localStorage on load.
-- **Autosave**: `localStorage` key `mapposter:autosave` — written on config change and after successful generate.
-- **OSM cache**: IndexedDB `mapposter-cache` / store `osm`, keyed by `latitude:longitude:radiusMeters` (5-decimal lat/lon, rounded radius). Cache is per-viewport, not per-theme.
-- **Generation phases**: `idle` → `geocoding` → `fetching` → `rendering` → `done` | `error` (also `exporting` during PNG/ZIP). UI reads `GenerationProgress` from `usePosterGenerator`.
+- **Autosave**: `localStorage` key `mapposter:autosave` — written on config change.
+- **Geocode cache**: IndexedDB `mapposter-cache` / store `geocode`, keyed by normalized city:country.
+- **Export phases**: `idle` → `exporting` → `done` | `error`. UI reads `ExportProgress` from `usePosterGenerator`.
 
 ## 📤 Export
 
 - **Presets**: `EXPORT_PRESETS` in `src/features/export/presets.ts` — Instagram, mobile/HD/4K wallpaper, A4, default poster (12×16 in). Add presets here; do not hardcode sizes in UI.
-- **Single PNG**: `exportPosterPng` — full 300 DPI canvas, downloaded as `{city}_{themeId}.png`.
-- **Batch ZIP**: `exportAllThemesZip` — all built-in themes for current viewport/features via JSZip. CPU-heavy; keep progress feedback.
-- **Export requires prior generate**: `features` array must be populated; throw clear error if empty.
+- **Single PNG**: `exportPosterPng` — SVG from map features, rasterized at full 300 DPI, downloaded as `{city}_{themeId}.png`.
+- **Single SVG**: `exportPosterSvg` — true vector SVG from `queryRenderedFeatures`.
+- **Batch ZIP**: `exportAllThemesZip` — PNG + SVG per built-in theme via JSZip. CPU-heavy; keep progress feedback.
+- **Export requires loaded map**: Map must be idle (`mapReady`) before export.
 
 ## 🎨 UI Guidelines
 
@@ -118,8 +120,8 @@ Follow `docs/design-direction.md`:
 ## 🧪 Testing
 
 - **Unit**: Vitest + jsdom. Place tests in `src/test/` or co-located `*.test.ts`. Mock fetch for API modules.
-- **E2E**: Playwright in `e2e/`. Mock `/api/geocode` and `/api/overpass` — do not hit real Nominatim/Overpass in CI.
-- Run `npm run test` and `npm run test:e2e` after changes to render pipeline, URL state, or API clients.
+- **E2E**: Playwright in `e2e/`. Mock `/api/geocode` — do not hit real Nominatim in CI. Map tiles may load from network in e2e.
+- Run `npm run test` and `npm run test:e2e` after changes to tile pipeline, URL state, or API clients.
 
 ## 🚀 Deployment (Cloudflare Pages)
 
@@ -134,4 +136,4 @@ Follow `docs/design-direction.md`:
 - **TypeScript**: Prefer explicit types from `src/lib/types.ts`. Avoid `any`; use narrow types for OSM tags and API payloads.
 - **Imports**: Use `@/` alias. Group: external → `@/components` → `@/features` → `@/lib` → relative.
 - **New dependencies**: Justify additions. Prefer existing stack (idb, jszip, radix, tailwind) over new libraries.
-- **Minimize scope**: Match surrounding code style. Reuse `usePosterGenerator`, `drawPoster`, and existing UI primitives rather than parallel implementations.
+- **Minimize scope**: Match surrounding code style. Reuse `usePosterGenerator`, `MapPosterPreview`, and existing UI primitives rather than parallel implementations.

@@ -6,8 +6,9 @@ Browser-based map poster generator inspired by [originalankur/maptoposter](https
 
 - Vite + React 19 + TypeScript
 - Tailwind CSS v4 + shadcn-style UI components
-- Overpass API + Nominatim geocoding
-- Canvas 2D rendering at 300 DPI
+- MapLibre GL + OpenFreeMap vector tiles
+- Nominatim geocoding (proxied)
+- Vector SVG export rasterized to PNG at 300 DPI
 
 ## Development
 
@@ -28,7 +29,7 @@ npm run preview
 - Build command: `npm run build`
 - Deploy command: `npm run deploy`
 - Static assets: `dist/` (via `wrangler.toml` `[assets]`)
-- API routes: compiled from `functions/` (`/api/geocode`, `/api/overpass`)
+- API routes: compiled from `functions/` (`/api/geocode`, `/api/boundary`)
 - Wrangler config: `wrangler.toml`
 
 ### KV setup (edge geocode cache)
@@ -53,7 +54,26 @@ Local `npm run dev` simulates the same KV behaviour with an in-memory cache in `
 - Radius control, display labels, Google Fonts family
 - Export presets (Instagram, A4, 4K, default poster)
 - Shareable URL state + local autosave
-- Theme JSON editor + batch all-themes ZIP export
+- Theme JSON editor
+- Live MapLibre preview (pan/zoom, no Generate button)
+- Fine-grained layer toggles (water, roads, buildings, rail, ship routes)
+- Optional city boundary mask (place admin polygon)
+- Vector SVG + PNG export; batch all-themes ZIP (PNG + SVG per theme)
+
+## Self-hosting (Docker)
+
+Map Poster Studio can run as a static app with geocode/boundary proxies — similar to other self-hosted map poster tools.
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Open `http://localhost:7200` (override with `APP_PORT`).
+
+Set `GEOCODE_CONTACT_EMAIL` for Nominatim policy compliance.
+
+Cloudflare Pages remains the primary deploy path for this repo (MIT license, lightweight edge functions + KV cache).
 
 ## License
 

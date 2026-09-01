@@ -1,5 +1,5 @@
-import type { PosterConfig } from "@/lib/types"
-import { DPI } from "@/lib/types"
+import type { PosterConfig, PosterLayerVisibility } from "@/lib/types"
+import { DEFAULT_LAYER_VISIBILITY, DPI } from "@/lib/types"
 
 const STORAGE_KEY = "mapposter:autosave"
 
@@ -17,8 +17,23 @@ export interface SerializedPosterState {
   centerLocked?: boolean
   widthInches: number
   heightInches: number
+  layerVisibility?: PosterLayerVisibility
+  boundaryMaskEnabled?: boolean
+  placeOsmType?: PosterConfig["placeOsmType"]
+  placeOsmId?: number
+  /** @deprecated Migrated to layerVisibility.shipRoutes */
+  showShipRoutes?: boolean
   /** @deprecated Ignored — rectangular framing only (upstream-compatible). */
   mapShape?: string
+}
+
+function migrateLayerVisibility(state: SerializedPosterState): PosterLayerVisibility {
+  if (state.layerVisibility) {
+    return { ...DEFAULT_LAYER_VISIBILITY, ...state.layerVisibility }
+  }
+
+  const shipRoutes = state.showShipRoutes ?? true
+  return { ...DEFAULT_LAYER_VISIBILITY, shipRoutes }
 }
 
 export function serializePosterState(config: PosterConfig): SerializedPosterState {
@@ -36,6 +51,10 @@ export function serializePosterState(config: PosterConfig): SerializedPosterStat
     centerLocked: config.centerLocked,
     widthInches: config.widthInches,
     heightInches: config.heightInches,
+    layerVisibility: config.layerVisibility,
+    boundaryMaskEnabled: config.boundaryMaskEnabled,
+    placeOsmType: config.placeOsmType,
+    placeOsmId: config.placeOsmId,
   }
 }
 
@@ -60,6 +79,10 @@ export function deserializePosterState(state: SerializedPosterState): PosterConf
     centerLocked: state.centerLocked ?? false,
     widthInches: state.widthInches,
     heightInches: state.heightInches,
+    layerVisibility: migrateLayerVisibility(state),
+    boundaryMaskEnabled: state.boundaryMaskEnabled ?? false,
+    placeOsmType: state.placeOsmType,
+    placeOsmId: state.placeOsmId,
   }
 }
 

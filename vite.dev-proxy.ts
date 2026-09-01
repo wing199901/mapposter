@@ -3,50 +3,15 @@ import type { Plugin } from "vite"
 /// <reference path="./functions/env.d.ts" />
 
 import {
+  readDevEdgeBoundary,
   readDevEdgeGeocode,
+  writeDevEdgeBoundary,
   writeDevEdgeGeocode,
 } from "./shared/devEdgeGeocodeCache.js"
-import { fetchNominatimGeocode as requestNominatimGeocode } from "./shared/nominatim.js"
-
-const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-  "https://overpass.openstreetmap.ru/api/interpreter",
-]
-
-async function proxyOverpassQuery(query: string): Promise<Response> {
-  const attempts = await Promise.allSettled(
-    OVERPASS_ENDPOINTS.map(async (endpoint) => {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent": "mapposter-web/1.0 (Overpass proxy)",
-        },
-        body: `data=${encodeURIComponent(query)}`,
-      })
-
-      if (!response.ok) {
-        throw new Error(`Overpass error ${response.status} from ${endpoint}`)
-      }
-
-      return response.json()
-    }),
-  )
-
-  const success = attempts.find((result) => result.status === "fulfilled")
-  if (success && success.status === "fulfilled") {
-    return Response.json(success.value)
-  }
-
-  const message = attempts
-    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-    .map((result) => String(result.reason))
-    .join("; ")
-
-  return Response.json({ error: message || "All Overpass endpoints failed" }, { status: 502 })
-}
+import {
+  fetchNominatimBoundary,
+  fetchNominatimGeocode as requestNominatimGeocode,
+} from "./shared/nominatim.js"
 
 async function fetchNominatimGeocode(city: string, country: string) {
   const upstream = await requestNominatimGeocode(city, country)
@@ -65,6 +30,20 @@ async function fetchNominatimGeocode(city: string, country: string) {
   }
 }
 
+function sendJson(
+  res: import("http").ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+) {
+  res.statusCode = status
+  res.setHeader("Content-Type", "application/json")
+  for (const [key, value] of Object.entries(headers)) {
+    res.setHeader(key, value)
+  }
+  res.end(JSON.stringify(body))
+}
+
 export function devApiProxyPlugin(): Plugin {
   return {
     name: "dev-api-proxy",
@@ -72,8 +51,7 @@ export function devApiProxyPlugin(): Plugin {
       server.middlewares.use("/api/geocode", (req, res) => {
         void (async () => {
           if (req.method !== "GET") {
-            res.statusCode = 405
-            res.end(JSON.stringify({ error: "Method not allowed" }))
+            sendJson(res, 405, { error: "Method not allowed" })
             return
           }
 
@@ -82,80 +60,95 @@ export function devApiProxyPlugin(): Plugin {
           const country = url.searchParams.get("country")?.trim()
 
           if (!city || !country) {
-            res.statusCode = 400
-            res.end(JSON.stringify({ error: "city and country are required" }))
+            sendJson(res, 400, { error: "city and country are required" })
             return
           }
 
           const cached = readDevEdgeGeocode(city, country)
           if (cached) {
-            res.statusCode = 200
-            res.setHeader("Content-Type", "application/json")
-            res.setHeader("X-Cache", "HIT")
-            res.end(
-              JSON.stringify({
+            sendJson(
+              res,
+              200,
+              {
                 latitude: cached.latitude,
                 longitude: cached.longitude,
                 displayName: cached.displayName,
                 suggestedRadiusMeters: cached.suggestedRadiusMeters,
-              }),
+                osmType: cached.osmType,
+                osmId: cached.osmId,
+              },
+              { "X-Cache": "HIT" },
             )
             return
           }
 
           const result = await fetchNominatimGeocode(city, country)
           if (result.status !== 200) {
-            res.statusCode = result.status
-            res.setHeader("X-Upstream-Status", String(result.upstreamStatus))
-            res.end(JSON.stringify(result.body))
+            sendJson(res, result.status, result.body, {
+              "X-Upstream-Status": String(result.upstreamStatus),
+            })
             return
           }
 
           writeDevEdgeGeocode(city, country, result.body)
 
-          res.statusCode = 200
-          res.setHeader("Content-Type", "application/json")
-          res.setHeader("X-Cache", "MISS")
-          res.setHeader("X-Upstream-Status", "200")
-          res.end(JSON.stringify(result.body))
+          sendJson(res, 200, result.body, {
+            "X-Cache": "MISS",
+            "X-Upstream-Status": "200",
+          })
         })()
       })
 
-      server.middlewares.use("/api/overpass", (req, res) => {
+      server.middlewares.use("/api/boundary", (req, res) => {
         void (async () => {
-          if (req.method !== "POST") {
-            res.statusCode = 405
-            res.end(JSON.stringify({ error: "Method not allowed" }))
+          if (req.method !== "GET") {
+            sendJson(res, 405, { error: "Method not allowed" })
             return
           }
 
-          const chunks: Buffer[] = []
-          await new Promise<void>((resolve, reject) => {
-            req.on("data", (chunk: Buffer) => chunks.push(chunk))
-            req.on("end", () => resolve())
-            req.on("error", reject)
-          })
+          const url = new URL(req.url ?? "", "http://localhost")
+          const osmType = url.searchParams.get("osmType")?.trim()
+          const osmIdRaw = url.searchParams.get("osmId")?.trim()
+          const osmId = osmIdRaw ? Number(osmIdRaw) : NaN
 
-          let query = ""
-          try {
-            const body = JSON.parse(Buffer.concat(chunks).toString()) as { query?: string }
-            query = body.query?.trim() ?? ""
-          } catch {
-            res.statusCode = 400
-            res.end(JSON.stringify({ error: "Invalid JSON body" }))
+          if (!osmType || !Number.isFinite(osmId)) {
+            sendJson(res, 400, { error: "osmType and osmId are required" })
             return
           }
 
-          if (!query) {
-            res.statusCode = 400
-            res.end(JSON.stringify({ error: "query is required" }))
+          if (osmType !== "node" && osmType !== "way" && osmType !== "relation") {
+            sendJson(res, 400, { error: "osmType must be node, way, or relation" })
             return
           }
 
-          const proxyResponse = await proxyOverpassQuery(query)
-          res.statusCode = proxyResponse.status
-          res.setHeader("Content-Type", "application/json")
-          res.end(await proxyResponse.text())
+          const cached = readDevEdgeBoundary(osmType, osmId)
+          if (cached) {
+            sendJson(res, 200, { geometry: cached.geometry }, { "X-Cache": "HIT" })
+            return
+          }
+
+          const upstream = await fetchNominatimBoundary(osmType, osmId)
+          if (!upstream.ok) {
+            sendJson(
+              res,
+              upstream.status === 404 ? 404 : 502,
+              { error: upstream.error },
+              { "X-Upstream-Status": String(upstream.status) },
+            )
+            return
+          }
+
+          writeDevEdgeBoundary(osmType, osmId, upstream.geometry)
+
+          sendJson(
+            res,
+            200,
+            { geometry: upstream.geometry },
+            {
+              "X-Cache": "MISS",
+              "X-Upstream-Status": "200",
+            },
+          )
         })()
       })
     },

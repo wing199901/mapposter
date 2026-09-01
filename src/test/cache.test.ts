@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { geocodeCacheKey, osmCacheKey } from "@/features/osm/cache"
+import { geocodeCacheKey } from "@/features/geocode/cache"
 import {
   CACHE_TTL_MS,
   CACHE_TTL_SECONDS,
@@ -18,11 +18,6 @@ describe("shared cache keys", () => {
 
   it("builds edge kv keys from geocode keys", () => {
     expect(edgeGeocodeKvKey("Paris", "France")).toBe("geocode:paris:france")
-  })
-
-  it("rounds osm cache keys to five decimal places", () => {
-    expect(osmCacheKey(48.85661, 2.35221, 10000)).toBe("48.85661:2.35221:10000:v2")
-    expect(osmCacheKey(48.856619, 2.352219, 10500)).toBe("48.85662:2.35222:10500:v2")
   })
 
   it("aligns ttl constants", () => {

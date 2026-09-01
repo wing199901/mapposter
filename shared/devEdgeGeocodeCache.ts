@@ -1,4 +1,5 @@
 import {
+  boundaryCacheKey,
   CACHE_TTL_MS,
   edgeGeocodeKvKey,
   isCacheStale,
@@ -9,10 +10,20 @@ export interface DevGeocodeCacheEntry {
   longitude: number
   displayName: string
   suggestedRadiusMeters?: number
+  osmType?: "node" | "way" | "relation"
+  osmId?: number
+  fetchedAt: number
+}
+
+import type { MultiPolygon, Polygon } from "geojson"
+
+export interface DevBoundaryCacheEntry {
+  geometry: Polygon | MultiPolygon
   fetchedAt: number
 }
 
 const devGeocodeCache = new Map<string, DevGeocodeCacheEntry>()
+const devBoundaryCache = new Map<string, DevBoundaryCacheEntry>()
 
 export function readDevEdgeGeocode(city: string, country: string): DevGeocodeCacheEntry | null {
   const cached = devGeocodeCache.get(edgeGeocodeKvKey(city, country))
@@ -36,8 +47,38 @@ export function writeDevEdgeGeocode(
   })
 }
 
+export function readDevEdgeBoundary(
+  osmType: string,
+  osmId: number,
+): DevBoundaryCacheEntry | null {
+  const key = boundaryCacheKey(osmType, osmId)
+  const cached = devBoundaryCache.get(key)
+  if (!cached || isCacheStale(cached.fetchedAt)) {
+    if (cached) {
+      devBoundaryCache.delete(key)
+    }
+    return null
+  }
+  return cached
+}
+
+export function writeDevEdgeBoundary(
+  osmType: string,
+  osmId: number,
+  geometry: Polygon | MultiPolygon,
+): void {
+  devBoundaryCache.set(boundaryCacheKey(osmType, osmId), {
+    geometry,
+    fetchedAt: Date.now(),
+  })
+}
+
 export function clearDevEdgeGeocodeCache(): void {
   devGeocodeCache.clear()
+}
+
+export function clearDevEdgeBoundaryCache(): void {
+  devBoundaryCache.clear()
 }
 
 export function getDevEdgeGeocodeCacheTtlMs(): number {

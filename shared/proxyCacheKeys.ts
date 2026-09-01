@@ -9,6 +9,14 @@ export function edgeGeocodeKvKey(city: string, country: string): string {
   return `geocode:${geocodeCacheKey(city, country)}`
 }
 
+export function boundaryCacheKey(osmType: string, osmId: number): string {
+  return `${osmType}:${osmId}`
+}
+
+export function edgeBoundaryKvKey(osmType: string, osmId: number): string {
+  return `boundary:${boundaryCacheKey(osmType, osmId)}`
+}
+
 export function isCacheStale(fetchedAt: number, ttlMs = CACHE_TTL_MS): boolean {
   return Date.now() - fetchedAt > ttlMs
 }

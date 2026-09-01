@@ -1,10 +1,15 @@
+import type { FeatureCollection, MultiPolygon, Polygon } from "geojson"
+
 export const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+export const NOMINATIM_LOOKUP_URL = "https://nominatim.openstreetmap.org/lookup"
 export const NOMINATIM_APP_URL = "https://mapposter.wing199901.workers.dev"
 export const NOMINATIM_DEFAULT_CONTACT_EMAIL = "wing199901@users.noreply.github.com"
 
 export const MIN_RADIUS_METERS = 4000
 export const MAX_RADIUS_METERS = 50000
 export const RADIUS_STEP_METERS = 500
+
+export type NominatimOsmType = "node" | "way" | "relation"
 
 export function buildNominatimUserAgent(contactEmail: string): string {
   return `mapposter-web/1.0 (+${NOMINATIM_APP_URL}; mailto:${contactEmail})`
@@ -19,10 +24,33 @@ export function buildNominatimSearchUrl(
     q: `${city}, ${country}`,
     format: "json",
     limit: "1",
+    polygon_geojson: "1",
+    polygon_threshold: "0.005",
     email: contactEmail,
   })
 
   return `${NOMINATIM_SEARCH_URL}?${params.toString()}`
+}
+
+export function osmIdToLookupToken(osmType: NominatimOsmType, osmId: number): string {
+  const prefix = osmType === "node" ? "N" : osmType === "way" ? "W" : "R"
+  return `${prefix}${osmId}`
+}
+
+export function buildNominatimLookupUrl(
+  osmType: NominatimOsmType,
+  osmId: number,
+  contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
+): string {
+  const params = new URLSearchParams({
+    osm_ids: osmIdToLookupToken(osmType, osmId),
+    format: "geojson",
+    polygon_geojson: "1",
+    polygon_threshold: "0.005",
+    email: contactEmail,
+  })
+
+  return `${NOMINATIM_LOOKUP_URL}?${params.toString()}`
 }
 
 export function buildNominatimRequestHeaders(
@@ -40,6 +68,8 @@ export interface NominatimSearchResult {
   longitude: number
   displayName: string
   suggestedRadiusMeters: number
+  osmType?: NominatimOsmType
+  osmId?: number
 }
 
 /** Nominatim boundingbox: [south lat, north lat, west lon, east lon] */
@@ -83,6 +113,13 @@ function parseBoundingBox(
   return [values[0]!, values[1]!, values[2]!, values[3]!]
 }
 
+function parseOsmType(raw: unknown): NominatimOsmType | undefined {
+  if (raw === "node" || raw === "way" || raw === "relation") {
+    return raw
+  }
+  return undefined
+}
+
 export async function fetchNominatimGeocode(
   city: string,
   country: string,
@@ -108,6 +145,8 @@ export async function fetchNominatimGeocode(
     lon: string
     display_name: string
     boundingbox?: string[]
+    osm_type?: string
+    osm_id?: number
   }>
   const first = results[0]
   if (!first) {
@@ -121,6 +160,8 @@ export async function fetchNominatimGeocode(
   const suggestedRadiusMeters = bbox
     ? suggestedRadiusFromBoundingBox(bbox, center.latitude)
     : 10000
+  const osmType = parseOsmType(first.osm_type)
+  const osmId = typeof first.osm_id === "number" ? first.osm_id : undefined
 
   return {
     ok: true,
@@ -129,6 +170,37 @@ export async function fetchNominatimGeocode(
       longitude: center.longitude,
       displayName: first.display_name,
       suggestedRadiusMeters,
+      ...(osmType && osmId != null ? { osmType, osmId } : {}),
     },
   }
+}
+
+export async function fetchNominatimBoundary(
+  osmType: NominatimOsmType,
+  osmId: number,
+  contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
+): Promise<
+  | { ok: true; geometry: Polygon | MultiPolygon }
+  | { ok: false; status: number; error: string }
+> {
+  const response = await fetch(buildNominatimLookupUrl(osmType, osmId, contactEmail), {
+    headers: buildNominatimRequestHeaders(contactEmail),
+  })
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: `Nominatim lookup failed (${response.status})`,
+    }
+  }
+
+  const payload = (await response.json()) as FeatureCollection
+  const feature = payload.features?.[0]
+  const geometry = feature?.geometry
+  if (!geometry || (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")) {
+    return { ok: false, status: 404, error: "No boundary polygon found" }
+  }
+
+  return { ok: true, geometry }
 }

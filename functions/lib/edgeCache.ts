@@ -2,6 +2,7 @@
 
 import {
   CACHE_TTL_SECONDS,
+  edgeBoundaryKvKey,
   edgeGeocodeKvKey,
   isCacheStale,
 } from "../../shared/proxyCacheKeys"
@@ -11,6 +12,13 @@ export interface EdgeGeocodeResult {
   longitude: number
   displayName: string
   suggestedRadiusMeters?: number
+  osmType?: "node" | "way" | "relation"
+  osmId?: number
+  fetchedAt: number
+}
+
+export interface EdgeBoundaryResult {
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon
   fetchedAt: number
 }
 
@@ -59,6 +67,51 @@ export async function writeEdgeGeocode(
   }
 
   await env.PROXY_CACHE.put(edgeGeocodeKvKey(city, country), JSON.stringify(payload), {
+    expirationTtl: CACHE_TTL_SECONDS,
+  })
+}
+
+export async function readEdgeBoundary(
+  env: EdgeCacheEnv,
+  osmType: string,
+  osmId: number,
+): Promise<EdgeBoundaryResult | null> {
+  if (!env.PROXY_CACHE) {
+    return null
+  }
+
+  const cached = await env.PROXY_CACHE.get(edgeBoundaryKvKey(osmType, osmId))
+  if (!cached) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(cached) as EdgeBoundaryResult
+    if (isCacheStale(parsed.fetchedAt)) {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export async function writeEdgeBoundary(
+  env: EdgeCacheEnv,
+  osmType: string,
+  osmId: number,
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon,
+): Promise<void> {
+  if (!env.PROXY_CACHE) {
+    return
+  }
+
+  const payload: EdgeBoundaryResult = {
+    geometry,
+    fetchedAt: Date.now(),
+  }
+
+  await env.PROXY_CACHE.put(edgeBoundaryKvKey(osmType, osmId), JSON.stringify(payload), {
     expirationTtl: CACHE_TTL_SECONDS,
   })
 }

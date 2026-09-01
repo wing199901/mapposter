@@ -11,22 +11,24 @@ import { MAX_INCHES, type PosterConfig } from "@/lib/types"
 interface ExportPopoverProps {
   config: PosterConfig
   setConfig: Dispatch<SetStateAction<PosterConfig>>
-  featureCount: number
+  mapReady: boolean
   isBusy: boolean
-  exportCurrent: () => Promise<void>
+  exportCurrentPng: () => Promise<void>
+  exportCurrentSvg: () => Promise<void>
   exportAllThemes: () => Promise<void>
 }
 
 export function ExportPopover({
   config,
   setConfig,
-  featureCount,
+  mapReady,
   isBusy,
-  exportCurrent,
+  exportCurrentPng,
+  exportCurrentSvg,
   exportAllThemes,
 }: ExportPopoverProps) {
   const [open, setOpen] = useState(false)
-  const canDownload = featureCount > 0 && !isBusy
+  const canDownload = mapReady && !isBusy
 
   const runDownload = async (action: () => Promise<void>) => {
     setOpen(false)
@@ -116,7 +118,7 @@ export function ExportPopover({
           <Button
             type="button"
             disabled={!canDownload}
-            onClick={() => void runDownload(exportCurrent)}
+            onClick={() => void runDownload(exportCurrentPng)}
           >
             <Download data-icon="inline-start" />
             Download PNG
@@ -125,9 +127,17 @@ export function ExportPopover({
             type="button"
             variant="secondary"
             disabled={!canDownload}
+            onClick={() => void runDownload(exportCurrentSvg)}
+          >
+            Download SVG
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!canDownload}
             onClick={() => void runDownload(exportAllThemes)}
           >
-            Download all themes (ZIP)
+            Download all themes (PNG + SVG ZIP)
           </Button>
         </div>
       </PopoverContent>

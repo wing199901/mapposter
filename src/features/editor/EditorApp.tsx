@@ -1,5 +1,5 @@
-import { Layers, MapPin, Palette, Share2, Sparkles } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { MapPin, Palette, Share2, Sparkles } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast, Toaster } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -17,18 +17,20 @@ import {
 } from "@/components/ui/select"
 import { Separator, Textarea } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
-import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ExportPopover } from "@/features/editor/ExportPopover"
+import { LayerTogglesSection } from "@/features/editor/LayerTogglesSection"
 import { isKnownPosterFont, POSTER_FONT_OPTIONS } from "@/features/editor/fontOptions"
 import {
-  isGenerationBusy,
+  isExportBusy,
   resolveProgressPercent,
 } from "@/features/editor/generationProgress"
-import { ExportPopover } from "@/features/editor/ExportPopover"
-import { PosterPreview } from "@/features/editor/PosterPreview"
 import { ThemeSwatchCard } from "@/features/editor/ThemeSwatchCard"
 import { usePosterGenerator } from "@/features/editor/usePosterGenerator"
 import { geocodeCity } from "@/features/geocode/nominatim"
+import { usePlaceBoundary } from "@/features/boundary/usePlaceBoundary"
+import { MapPosterPreview } from "@/features/tiles/MapPosterPreview"
+import type { MapPosterHandle } from "@/features/tiles/mapPosterRef"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
 import type { PosterTheme } from "@/lib/types"
 import { encodePosterState } from "@/lib/urlState"
@@ -46,19 +48,27 @@ const DISTANCE_HINTS = [
 ]
 
 export function EditorApp() {
+  const mapRef = useRef<MapPosterHandle | null>(null)
+  const boundaryGeometryRef = useRef<GeoJSON.Polygon | GeoJSON.MultiPolygon | null>(null)
   const {
     config,
     setConfig,
     theme,
-    features,
-    previewUrl,
+    mapReady,
+    setMapReady,
     progress,
     error,
-    generate,
-    exportCurrent,
+    exportCurrentPng,
+    exportCurrentSvg,
     exportAllThemes,
     pixelSize,
-  } = usePosterGenerator()
+  } = usePosterGenerator(mapRef, () => boundaryGeometryRef.current)
+
+  const { boundaryGeometry, boundaryAvailable, boundaryLoading } = usePlaceBoundary(config)
+
+  useEffect(() => {
+    boundaryGeometryRef.current = boundaryGeometry
+  }, [boundaryGeometry])
 
   const [themeJson, setThemeJson] = useState("")
   const [locationMode, setLocationMode] = useState<"search" | "coordinates">("search")
@@ -66,17 +76,20 @@ export function EditorApp() {
   const [placeCountry, setPlaceCountry] = useState(config.geocode.country)
   const [placeLookupMessage, setPlaceLookupMessage] = useState<string | null>(null)
   const [isPlaceLookingUp, setIsPlaceLookingUp] = useState(false)
-  const [mapDataStale, setMapDataStale] = useState(false)
   const themes = useMemo(() => listThemes(), [])
-  const isBusy = isGenerationBusy(progress)
+  const isBusy = isExportBusy(progress)
   const progressPercent = resolveProgressPercent(progress)
-  const canPanPreview = features.length > 0 && Boolean(previewUrl)
-  const generateDisabled = isBusy || isPlaceLookingUp
-  const generateLabel = isBusy
-    ? progress.message
-    : isPlaceLookingUp
-      ? "Looking up place…"
-      : "Generate poster"
+
+  const handleViewportChange = useCallback(
+    (patch: Partial<typeof config.viewport>) => {
+      setConfig((current) => ({
+        ...current,
+        centerLocked: true,
+        viewport: { ...current.viewport, ...patch },
+      }))
+    },
+    [setConfig],
+  )
 
   const shareLink = `${window.location.origin}${window.location.pathname}#p=${encodePosterState(config)}`
 
@@ -84,12 +97,6 @@ export function EditorApp() {
     setPlaceCity(config.geocode.city)
     setPlaceCountry(config.geocode.country)
   }, [config.geocode.city, config.geocode.country])
-
-  useEffect(() => {
-    if (progress.phase === "done" && progress.message === "Poster ready") {
-      setMapDataStale(false)
-    }
-  }, [progress.phase, progress.message])
 
   useEffect(() => {
     if (locationMode !== "search") {
@@ -147,6 +154,8 @@ export function EditorApp() {
             ...current,
             geocode: { city: placeCity, country: placeCountry },
             display: { city: placeCity, country: placeCountry },
+            placeOsmType: result.osmType,
+            placeOsmId: result.osmId,
             viewport: {
               ...current.viewport,
               ...(current.centerLocked
@@ -160,8 +169,8 @@ export function EditorApp() {
           }))
           setPlaceLookupMessage(
             suggested != null
-              ? `Suggested fetch radius ${Math.round(suggested)} m from place size. Click Generate to download map data.`
-              : "Place found. Click Generate to download map data.",
+              ? `Suggested map radius ${Math.round(suggested)} m from place size. The preview updates live.`
+              : "Place found. The preview updates live.",
           )
         } catch {
           if (!cancelled) {
@@ -247,8 +256,8 @@ export function EditorApp() {
 
               <TabsContent value="search" className="flex flex-col gap-4">
                 <p className="text-xs text-muted-foreground">
-                  Type a city and country — labels and suggested fetch radius update after you pause
-                  typing. Click Generate to download map data.
+                  Type a city and country — labels and suggested map radius update after you pause
+                  typing. The map preview updates live.
                 </p>
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="city">City</Label>
@@ -277,8 +286,7 @@ export function EditorApp() {
 
               <TabsContent value="coordinates" className="flex flex-col gap-4">
                 <p className="text-xs text-muted-foreground">
-                  Use this when you already know the center point. Geocoding is skipped; set radius
-                  below before generating.
+                  Enter the center point directly. Pan and zoom the live preview to fine-tune framing.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
@@ -289,7 +297,6 @@ export function EditorApp() {
                       step="0.0001"
                       value={config.viewport.latitude}
                       onChange={(event) => {
-                        setMapDataStale(features.length > 0)
                         setConfig((current) => ({
                           ...current,
                           centerLocked: true,
@@ -309,7 +316,6 @@ export function EditorApp() {
                       step="0.0001"
                       value={config.viewport.longitude}
                       onChange={(event) => {
-                        setMapDataStale(features.length > 0)
                         setConfig((current) => ({
                           ...current,
                           centerLocked: true,
@@ -327,14 +333,12 @@ export function EditorApp() {
 
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
-                <Label>Fetch radius</Label>
+                <Label>Map radius</Label>
                 <Badge variant="outline">{Math.round(config.viewport.radiusMeters)} m</Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Controls how much OpenStreetMap data is downloaded when you generate. Place name
-                mode auto-sets this from the place size (about 4–50 km). Adjust before Generate if
-                you want a tighter or wider map. Radii above about 15–20 km can be slow or fail
-                because Overpass returns a lot of data.
+                Controls how far the live map is zoomed out. Place name mode auto-sets this from the
+                place size (about 4–50 km). Pan and zoom the preview to adjust framing.
               </p>
               <Slider
                 min={MIN_RADIUS_METERS}
@@ -353,8 +357,7 @@ export function EditorApp() {
               />
               {config.viewport.radiusMeters > 20000 ? (
                 <p className="text-xs text-amber-700 dark:text-amber-400">
-                  Large fetch radius — Generate may take a long time or fail on public Overpass
-                  servers.
+                  Large map radius — tiles may load slowly on the public OpenFreeMap service.
                 </p>
               ) : null}
               <div className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -365,27 +368,6 @@ export function EditorApp() {
                 ))}
               </div>
             </div>
-            <Button
-              className="relative w-full overflow-hidden disabled:opacity-100"
-              onClick={() => void generate(locationMode === "coordinates")}
-              disabled={generateDisabled}
-              aria-busy={generateDisabled}
-            >
-              {isBusy ? (
-                <span
-                  aria-hidden
-                  className="absolute inset-y-0 left-0 bg-primary-foreground/25 transition-[width] duration-300 ease-out"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              ) : null}
-              <span className="relative z-10 inline-flex items-center gap-2">
-                {generateDisabled ? <Spinner className="text-primary-foreground" /> : null}
-                <span className="truncate">{generateLabel}</span>
-                {isBusy ? (
-                  <span className="tabular-nums opacity-80">{progressPercent}%</span>
-                ) : null}
-              </span>
-            </Button>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </CardContent>
           </Card>
@@ -402,6 +384,7 @@ export function EditorApp() {
             <Tabs defaultValue="themes">
               <TabsList>
                 <TabsTrigger value="themes">Themes</TabsTrigger>
+                <TabsTrigger value="layers">Layers</TabsTrigger>
                 <TabsTrigger value="labels">Labels</TabsTrigger>
               </TabsList>
 
@@ -449,6 +432,15 @@ export function EditorApp() {
                     Apply custom theme
                   </Button>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="layers">
+                <LayerTogglesSection
+                  config={config}
+                  boundaryAvailable={boundaryAvailable}
+                  boundaryLoading={boundaryLoading}
+                  onConfigChange={setConfig}
+                />
               </TabsContent>
 
               <TabsContent value="labels">
@@ -515,61 +507,40 @@ export function EditorApp() {
         </Card>
         </div>
 
-        <Card className="flex min-h-0 flex-col lg:min-h-[calc(100vh-8rem)]">
+        <Card className="flex h-fit flex-col">
           <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
             <div className="flex flex-col gap-1.5">
               <CardTitle>Preview</CardTitle>
               <CardDescription>
-                {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI
+                {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI ·{" "}
+                {config.widthInches} × {config.heightInches} in preview
               </CardDescription>
             </div>
             <ExportPopover
               config={config}
               setConfig={setConfig}
-              featureCount={features.length}
-              isBusy={isBusy}
-              exportCurrent={exportCurrent}
+              mapReady={mapReady}
+              isBusy={isBusy || isPlaceLookingUp}
+              exportCurrentPng={exportCurrentPng}
+              exportCurrentSvg={exportCurrentSvg}
               exportAllThemes={exportAllThemes}
             />
           </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-[520px] flex-1 flex-col gap-3">
-              <div className="flex flex-1 items-start justify-center rounded-xl border bg-muted/30 p-4">
-                {previewUrl ? (
-                  <PosterPreview
-                    previewUrl={previewUrl}
-                    alt={`${config.display.city} map poster preview`}
-                    config={config}
-                    canPan={canPanPreview}
-                    onPanCenter={(latitude, longitude) => {
-                      setMapDataStale(true)
-                      setConfig((current) => ({
-                        ...current,
-                        centerLocked: true,
-                        viewport: {
-                          ...current.viewport,
-                          latitude,
-                          longitude,
-                        },
-                      }))
-                    }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-                    <Layers className="size-10 opacity-40" />
-                    <p>Generate a poster to see the live preview.</p>
-                  </div>
-                )}
+          <CardContent className="flex flex-col">
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-center rounded-xl border bg-muted/30 p-4">
+                <MapPosterPreview
+                  ref={mapRef}
+                  config={config}
+                  theme={theme}
+                  boundaryGeometry={boundaryGeometry}
+                  onViewportChange={handleViewportChange}
+                  onReadyChange={setMapReady}
+                />
               </div>
-              {mapDataStale ? (
-                <p className="text-sm text-amber-700 dark:text-amber-400">
-                  Center moved — Generate to refresh map data
-                </p>
-              ) : canPanPreview ? (
-                <p className="text-xs text-muted-foreground">
-                  Drag the preview to pan the map center. Radius stays the same.
-                </p>
-              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Drag to pan and scroll to zoom. Export when the map finishes loading.
+              </p>
             </div>
           </CardContent>
         </Card>

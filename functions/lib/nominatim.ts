@@ -1,4 +1,5 @@
 import {
+  fetchNominatimBoundary,
   fetchNominatimGeocode,
   NOMINATIM_DEFAULT_CONTACT_EMAIL,
 } from "../../shared/nominatim"
@@ -14,4 +15,12 @@ export async function geocodeFromNominatim(
   env: { GEOCODE_CONTACT_EMAIL?: string },
 ) {
   return fetchNominatimGeocode(city, country, resolveGeocodeContactEmail(env))
+}
+
+export async function boundaryFromNominatim(
+  osmType: "node" | "way" | "relation",
+  osmId: number,
+  env: { GEOCODE_CONTACT_EMAIL?: string },
+) {
+  return fetchNominatimBoundary(osmType, osmId, resolveGeocodeContactEmail(env))
 }

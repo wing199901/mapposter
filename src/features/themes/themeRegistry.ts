@@ -26,6 +26,7 @@ const DEFAULT_THEME: PosterTheme = {
   gradient_color: "#FFFFFF",
   water: "#C0C0C0",
   parks: "#F0F0F0",
+  buildings: "#4A4A4A",
   road_motorway: "#0A0A0A",
   road_primary: "#1A1A1A",
   road_secondary: "#2A2A2A",

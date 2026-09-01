@@ -1,0 +1,9 @@
+services:
+  mapposter:
+    build: .
+    ports:
+      - "${APP_PORT:-7200}:7200"
+    environment:
+      APP_PORT: "7200"
+      GEOCODE_CONTACT_EMAIL: "${GEOCODE_CONTACT_EMAIL:-}"
+    restart: unless-stopped

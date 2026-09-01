@@ -4,45 +4,27 @@ const mockGeocode = {
   latitude: 48.8566,
   longitude: 2.3522,
   displayName: "Paris, France",
+  suggestedRadiusMeters: 10000,
+  osmType: "relation",
+  osmId: 7444,
 }
 
-const mockOverpass = {
-  elements: [
-    {
-      type: "way",
-      id: 101,
-      tags: { highway: "primary" },
-      geometry: [
-        { lat: 48.855, lon: 2.35 },
-        { lat: 48.858, lon: 2.355 },
+const mockBoundary = {
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      [
+        [2.25, 48.8],
+        [2.45, 48.8],
+        [2.45, 48.92],
+        [2.25, 48.92],
+        [2.25, 48.8],
       ],
-    },
-    {
-      type: "way",
-      id: 102,
-      tags: { natural: "water" },
-      geometry: [
-        { lat: 48.854, lon: 2.349 },
-        { lat: 48.856, lon: 2.351 },
-        { lat: 48.855, lon: 2.353 },
-        { lat: 48.854, lon: 2.349 },
-      ],
-    },
-    {
-      type: "way",
-      id: 103,
-      tags: { leisure: "park" },
-      geometry: [
-        { lat: 48.857, lon: 2.351 },
-        { lat: 48.859, lon: 2.354 },
-        { lat: 48.858, lon: 2.356 },
-        { lat: 48.857, lon: 2.351 },
-      ],
-    },
-  ],
+    ],
+  },
 }
 
-async function mockPosterApis(page: import("@playwright/test").Page) {
+async function mockGeocodeApi(page: import("@playwright/test").Page) {
   await page.route("**/api/geocode**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -50,70 +32,69 @@ async function mockPosterApis(page: import("@playwright/test").Page) {
       body: JSON.stringify(mockGeocode),
     })
   })
+}
 
-  await page.route("**/api/overpass**", async (route) => {
+async function mockBoundaryApi(page: import("@playwright/test").Page) {
+  await page.route("**/api/boundary**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(mockOverpass),
+      body: JSON.stringify(mockBoundary),
     })
   })
 }
 
 test.describe("Map Poster Studio", () => {
-  test("loads editor shell", async ({ page }) => {
+  test("loads editor shell with live preview", async ({ page }) => {
     await page.goto("/")
     await expect(page.getByRole("heading", { name: "Map Poster Studio" })).toBeVisible()
-    await expect(page.getByRole("button", { name: "Generate poster" })).toBeVisible()
-    await expect(page.getByText("Generate a poster to see the live preview.")).toBeVisible()
-  })
-
-  test("generates a mocked poster preview", async ({ page }) => {
-    await mockPosterApis(page)
-    await page.goto("/")
-
-    await page.getByLabel("City").fill("Paris")
-    await page.getByLabel("Country").fill("France")
-    await page.getByRole("button", { name: "Generate poster" }).click()
-
-    await expect(page.getByText("Poster ready")).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByRole("img", { name: /Paris map poster preview/i })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
+    await expect(page.getByText("Drag to pan and scroll to zoom")).toBeVisible()
   })
 
   test("switches theme and updates share link hash", async ({ page }) => {
-    await mockPosterApis(page)
+    await mockGeocodeApi(page)
     await page.goto("/")
 
     await page.getByRole("button", { name: "Noir" }).click()
     await expect(page.locator("button.border-primary", { hasText: "Noir" })).toBeVisible()
 
-    const hash = await page.evaluate(() => window.location.hash)
-    expect(hash).toMatch(/^#p=/)
-  })
-
-  test("re-renders preview when theme changes after generate", async ({ page }) => {
-    await mockPosterApis(page)
-    await page.goto("/")
-
-    await page.getByRole("button", { name: "Generate poster" }).click()
-    await expect(page.getByText("Poster ready")).toBeVisible({ timeout: 30_000 })
-
-    const preview = page.getByRole("img", { name: /Paris map poster preview/i })
-    const initialSrc = await preview.getAttribute("src")
-    expect(initialSrc).toMatch(/^blob:/)
-
-    await page.getByRole("button", { name: "Noir" }).click()
     await expect
-      .poll(async () => preview.getAttribute("src"), { timeout: 10_000 })
-      .not.toBe(initialSrc)
+      .poll(async () => page.evaluate(() => window.location.hash))
+      .toMatch(/^#p=/)
   })
 
   test("applies export preset dimensions", async ({ page }) => {
     await page.goto("/")
-    await page.getByRole("tab", { name: "Export" }).click()
+    await page.getByRole("button", { name: "Export" }).click()
     await page.getByRole("button", { name: /Instagram Post/i }).click()
 
     await expect(page.getByLabel("Width (in)")).toHaveValue("3.6")
     await expect(page.getByLabel("Height (in)")).toHaveValue("3.6")
+  })
+
+  test("shows place lookup hint after geocode", async ({ page }) => {
+    await mockGeocodeApi(page)
+    await page.goto("/")
+
+    await page.getByLabel("City").fill("Paris")
+    await page.getByLabel("Country").fill("France")
+
+    await expect(
+      page.getByText(/Suggested map radius \d+ m from place size|Place found\. The preview updates live/i),
+    ).toBeVisible({
+      timeout: 15_000,
+    })
+  })
+
+  test("layers tab toggles buildings visibility", async ({ page }) => {
+    await mockGeocodeApi(page)
+    await mockBoundaryApi(page)
+    await page.goto("/")
+
+    await page.getByRole("tab", { name: "Layers" }).click()
+    await expect(page.getByLabel("Buildings")).not.toBeChecked()
+    await page.getByLabel("Buildings").check()
+    await expect(page.getByLabel("Buildings")).toBeChecked()
   })
 })

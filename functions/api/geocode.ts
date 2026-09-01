@@ -17,6 +17,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         longitude: cached.longitude,
         displayName: cached.displayName,
         suggestedRadiusMeters: cached.suggestedRadiusMeters,
+        osmType: cached.osmType,
+        osmId: cached.osmId,
       },
       { headers: { "X-Cache": "HIT" } },
     )
