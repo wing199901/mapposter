@@ -9,15 +9,18 @@ import {
   writeDevEdgeGeocode,
 } from "./shared/devEdgeGeocodeCache.js"
 import {
-  fetchNominatimBoundary,
   fetchNominatimGeocode as requestNominatimGeocode,
+  resolveBoundaryForMask,
 } from "./shared/nominatim.js"
 
 async function fetchNominatimGeocode(city: string, country: string) {
   const upstream = await requestNominatimGeocode(city, country)
   if (!upstream.ok) {
     return {
-      status: (upstream.status === 404 ? 404 : 502) as 404 | 502,
+      status: (upstream.status === 404 ? 404 : upstream.status === 429 ? 429 : 502) as
+        | 404
+        | 429
+        | 502,
       upstreamStatus: upstream.status,
       body: { error: upstream.error },
     }
@@ -110,6 +113,8 @@ export function devApiProxyPlugin(): Plugin {
           const osmType = url.searchParams.get("osmType")?.trim()
           const osmIdRaw = url.searchParams.get("osmId")?.trim()
           const osmId = osmIdRaw ? Number(osmIdRaw) : NaN
+          const radiusRaw = url.searchParams.get("radiusMeters")?.trim()
+          const radiusMeters = radiusRaw ? Number(radiusRaw) : undefined
 
           if (!osmType || !Number.isFinite(osmId)) {
             sendJson(res, 400, { error: "osmType and osmId are required" })
@@ -121,13 +126,18 @@ export function devApiProxyPlugin(): Plugin {
             return
           }
 
-          const cached = readDevEdgeBoundary(osmType, osmId)
+          if (radiusMeters != null && (!Number.isFinite(radiusMeters) || radiusMeters <= 0)) {
+            sendJson(res, 400, { error: "radiusMeters must be a positive number" })
+            return
+          }
+
+          const cached = readDevEdgeBoundary(osmType, osmId, radiusMeters)
           if (cached) {
             sendJson(res, 200, { geometry: cached.geometry }, { "X-Cache": "HIT" })
             return
           }
 
-          const upstream = await fetchNominatimBoundary(osmType, osmId)
+          const upstream = await resolveBoundaryForMask(osmType, osmId, undefined, radiusMeters)
           if (!upstream.ok) {
             sendJson(
               res,
@@ -138,7 +148,7 @@ export function devApiProxyPlugin(): Plugin {
             return
           }
 
-          writeDevEdgeBoundary(osmType, osmId, upstream.geometry)
+          writeDevEdgeBoundary(osmType, osmId, upstream.geometry, radiusMeters)
 
           sendJson(
             res,

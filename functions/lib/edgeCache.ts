@@ -75,12 +75,13 @@ export async function readEdgeBoundary(
   env: EdgeCacheEnv,
   osmType: string,
   osmId: number,
+  radiusMeters?: number,
 ): Promise<EdgeBoundaryResult | null> {
   if (!env.PROXY_CACHE) {
     return null
   }
 
-  const cached = await env.PROXY_CACHE.get(edgeBoundaryKvKey(osmType, osmId))
+  const cached = await env.PROXY_CACHE.get(edgeBoundaryKvKey(osmType, osmId, radiusMeters))
   if (!cached) {
     return null
   }
@@ -101,6 +102,7 @@ export async function writeEdgeBoundary(
   osmType: string,
   osmId: number,
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  radiusMeters?: number,
 ): Promise<void> {
   if (!env.PROXY_CACHE) {
     return
@@ -111,7 +113,11 @@ export async function writeEdgeBoundary(
     fetchedAt: Date.now(),
   }
 
-  await env.PROXY_CACHE.put(edgeBoundaryKvKey(osmType, osmId), JSON.stringify(payload), {
-    expirationTtl: CACHE_TTL_SECONDS,
-  })
+  await env.PROXY_CACHE.put(
+    edgeBoundaryKvKey(osmType, osmId, radiusMeters),
+    JSON.stringify(payload),
+    {
+      expirationTtl: CACHE_TTL_SECONDS,
+    },
+  )
 }

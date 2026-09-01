@@ -4,7 +4,9 @@ import type { OsmType, PosterConfig } from "@/lib/types"
 
 import { fetchPlaceBoundary } from "./fetchPlaceBoundary"
 
-export function usePlaceBoundary(config: Pick<PosterConfig, "placeOsmType" | "placeOsmId">) {
+export function usePlaceBoundary(
+  config: Pick<PosterConfig, "placeOsmType" | "placeOsmId" | "viewport">,
+) {
   const [boundaryGeometry, setBoundaryGeometry] = useState<
     GeoJSON.Polygon | GeoJSON.MultiPolygon | null
   >(null)
@@ -23,7 +25,7 @@ export function usePlaceBoundary(config: Pick<PosterConfig, "placeOsmType" | "pl
     let cancelled = false
     setBoundaryLoading(true)
 
-    void fetchPlaceBoundary(placeOsmType, placeOsmId)
+    void fetchPlaceBoundary(placeOsmType, placeOsmId, config.viewport.radiusMeters)
       .then((geometry) => {
         if (cancelled) {
           return
@@ -46,7 +48,7 @@ export function usePlaceBoundary(config: Pick<PosterConfig, "placeOsmType" | "pl
     return () => {
       cancelled = true
     }
-  }, [config.placeOsmType, config.placeOsmId])
+  }, [config.placeOsmType, config.placeOsmId, config.viewport.radiusMeters])
 
   return { boundaryGeometry, boundaryAvailable, boundaryLoading }
 }

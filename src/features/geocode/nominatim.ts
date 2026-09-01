@@ -9,13 +9,10 @@ export async function geocodeCity(query: GeocodeQuery): Promise<GeocodeResult> {
   })
 
   const response = await fetch(`${NOMINATIM_BASE}?${params.toString()}`)
-  if (!response.ok) {
-    throw new Error(`Geocoding failed (${response.status})`)
-  }
-
   const payload = (await response.json()) as GeocodeResult | { error: string }
-  if ("error" in payload) {
-    throw new Error(payload.error)
+  if (!response.ok || "error" in payload) {
+    const message = "error" in payload ? payload.error : `Geocoding failed (${response.status})`
+    throw new Error(`${response.status}:${message}`)
   }
 
   return payload

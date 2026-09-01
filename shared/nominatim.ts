@@ -1,7 +1,14 @@
 import type { FeatureCollection, MultiPolygon, Polygon } from "geojson"
 
+import {
+  boundaryNeedsEnclosingAdmin,
+  geometryBboxCenter,
+  geometryBboxDiagonalMeters,
+} from "./boundaryGeometry.js"
+
 export const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 export const NOMINATIM_LOOKUP_URL = "https://nominatim.openstreetmap.org/lookup"
+export const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 export const NOMINATIM_APP_URL = "https://mapposter.wing199901.workers.dev"
 export const NOMINATIM_DEFAULT_CONTACT_EMAIL = "wing199901@users.noreply.github.com"
 
@@ -15,19 +22,66 @@ export function buildNominatimUserAgent(contactEmail: string): string {
   return `mapposter-web/1.0 (+${NOMINATIM_APP_URL}; mailto:${contactEmail})`
 }
 
-export function buildNominatimSearchUrl(
+export interface GeocodeSearchAttempt {
+  q: string
+  countrycodes?: string
+}
+
+export function buildGeocodeSearchAttempts(
   city: string,
   country: string,
+): GeocodeSearchAttempt[] {
+  const place = city.trim()
+  const region = country.trim()
+  if (!place || !region) {
+    return []
+  }
+
+  const attempts: GeocodeSearchAttempt[] = []
+  const seen = new Set<string>()
+
+  const add = (q: string, countrycodes?: string) => {
+    const key = `${q}\0${countrycodes ?? ""}`
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    attempts.push({ q, countrycodes })
+  }
+
+  const regionLower = region.toLowerCase()
+  const isHongKong =
+    regionLower === "hong kong" || regionLower === "hk" || region === "香港"
+
+  if (isHongKong) {
+    // Prefer HK-scoped queries first — e.g. "Hong Kong Island" vs the SAR "Hong Kong".
+    add(`${place}, Hong Kong`, "hk")
+    add(place, "hk")
+    add(`${place}, China`, "hk")
+  }
+
+  add(`${place}, ${region}`)
+  if (isHongKong) {
+    add(`${place}, China`)
+  }
+
+  return attempts
+}
+
+export function buildNominatimSearchUrl(
+  attempt: GeocodeSearchAttempt,
   contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
 ): string {
   const params = new URLSearchParams({
-    q: `${city}, ${country}`,
+    q: attempt.q,
     format: "json",
     limit: "1",
-    polygon_geojson: "1",
-    polygon_threshold: "0.005",
     email: contactEmail,
   })
+
+  if (attempt.countrycodes) {
+    params.set("countrycodes", attempt.countrycodes)
+  }
 
   return `${NOMINATIM_SEARCH_URL}?${params.toString()}`
 }
@@ -35,6 +89,24 @@ export function buildNominatimSearchUrl(
 export function osmIdToLookupToken(osmType: NominatimOsmType, osmId: number): string {
   const prefix = osmType === "node" ? "N" : osmType === "way" ? "W" : "R"
   return `${prefix}${osmId}`
+}
+
+export function buildNominatimReverseUrl(
+  latitude: number,
+  longitude: number,
+  zoom: number,
+  contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
+): string {
+  const params = new URLSearchParams({
+    lat: String(latitude),
+    lon: String(longitude),
+    format: "geojson",
+    polygon_geojson: "1",
+    zoom: String(zoom),
+    email: contactEmail,
+  })
+
+  return `${NOMINATIM_REVERSE_URL}?${params.toString()}`
 }
 
 export function buildNominatimLookupUrl(
@@ -120,6 +192,47 @@ function parseOsmType(raw: unknown): NominatimOsmType | undefined {
   return undefined
 }
 
+type NominatimSearchHit = {
+  lat: string
+  lon: string
+  display_name: string
+  boundingbox?: string[]
+  osm_type?: string
+  osm_id?: number
+}
+
+function parseNominatimSearchHit(hit: NominatimSearchHit | undefined): NominatimSearchResult | null {
+  if (!hit) {
+    return null
+  }
+
+  const pointLatitude = Number(hit.lat)
+  const pointLongitude = Number(hit.lon)
+  const bbox = parseBoundingBox(hit.boundingbox)
+  const center = bbox
+    ? centerFromBoundingBox(bbox)
+    : { latitude: pointLatitude, longitude: pointLongitude }
+  const suggestedRadiusMeters = bbox
+    ? suggestedRadiusFromBoundingBox(bbox, center.latitude)
+    : 10000
+  const osmType = parseOsmType(hit.osm_type)
+  const osmId = typeof hit.osm_id === "number" ? hit.osm_id : undefined
+
+  return {
+    latitude: center.latitude,
+    longitude: center.longitude,
+    displayName: hit.display_name,
+    suggestedRadiusMeters,
+    ...(osmType && osmId != null ? { osmType, osmId } : {}),
+  }
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
 export async function fetchNominatimGeocode(
   city: string,
   country: string,
@@ -128,51 +241,41 @@ export async function fetchNominatimGeocode(
   | { ok: true; result: NominatimSearchResult }
   | { ok: false; status: number; error: string }
 > {
-  const response = await fetch(buildNominatimSearchUrl(city, country, contactEmail), {
-    headers: buildNominatimRequestHeaders(contactEmail),
-  })
+  const attempts = buildGeocodeSearchAttempts(city, country)
+  if (attempts.length === 0) {
+    return { ok: false, status: 400, error: "city and country are required" }
+  }
 
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: `Nominatim request failed (${response.status})`,
+  for (let index = 0; index < attempts.length; index += 1) {
+    if (index > 0) {
+      await sleepMs(1100)
+    }
+
+    const attempt = attempts[index]!
+    const response = await fetch(buildNominatimSearchUrl(attempt, contactEmail), {
+      headers: buildNominatimRequestHeaders(contactEmail),
+    })
+
+    if (response.status === 429) {
+      return {
+        ok: false,
+        status: 429,
+        error: "Nominatim rate limit — try again shortly",
+      }
+    }
+
+    if (!response.ok) {
+      continue
+    }
+
+    const results = (await response.json()) as NominatimSearchHit[]
+    const parsed = parseNominatimSearchHit(results[0])
+    if (parsed) {
+      return { ok: true, result: parsed }
     }
   }
 
-  const results = (await response.json()) as Array<{
-    lat: string
-    lon: string
-    display_name: string
-    boundingbox?: string[]
-    osm_type?: string
-    osm_id?: number
-  }>
-  const first = results[0]
-  if (!first) {
-    return { ok: false, status: 404, error: "No results found" }
-  }
-
-  const pointLatitude = Number(first.lat)
-  const pointLongitude = Number(first.lon)
-  const bbox = parseBoundingBox(first.boundingbox)
-  const center = bbox ? centerFromBoundingBox(bbox) : { latitude: pointLatitude, longitude: pointLongitude }
-  const suggestedRadiusMeters = bbox
-    ? suggestedRadiusFromBoundingBox(bbox, center.latitude)
-    : 10000
-  const osmType = parseOsmType(first.osm_type)
-  const osmId = typeof first.osm_id === "number" ? first.osm_id : undefined
-
-  return {
-    ok: true,
-    result: {
-      latitude: center.latitude,
-      longitude: center.longitude,
-      displayName: first.display_name,
-      suggestedRadiusMeters,
-      ...(osmType && osmId != null ? { osmType, osmId } : {}),
-    },
-  }
+  return { ok: false, status: 404, error: "No results found" }
 }
 
 export async function fetchNominatimBoundary(
@@ -203,4 +306,111 @@ export async function fetchNominatimBoundary(
   }
 
   return { ok: true, geometry }
+}
+
+export async function fetchNominatimReverseBoundary(
+  latitude: number,
+  longitude: number,
+  zoom: number,
+  contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
+): Promise<
+  | { ok: true; geometry: Polygon | MultiPolygon }
+  | { ok: false; status: number; error: string }
+> {
+  const response = await fetch(
+    buildNominatimReverseUrl(latitude, longitude, zoom, contactEmail),
+    {
+      headers: buildNominatimRequestHeaders(contactEmail),
+    },
+  )
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: `Nominatim reverse failed (${response.status})`,
+    }
+  }
+
+  const payload = (await response.json()) as FeatureCollection
+  const feature = payload.features?.[0]
+  const geometry = feature?.geometry
+  if (!geometry || (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")) {
+    return { ok: false, status: 404, error: "No boundary polygon found" }
+  }
+
+  return { ok: true, geometry }
+}
+
+const ENCLOSING_ADMIN_MIN_ZOOM = 8
+const ENCLOSING_ADMIN_MAX_ZOOM = 12
+
+export async function fetchEnclosingAdminBoundary(
+  latitude: number,
+  longitude: number,
+  radiusMeters: number,
+  contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
+): Promise<Polygon | MultiPolygon | null> {
+  const minDiagonal = radiusMeters * 1.2
+  const maxDiagonal = radiusMeters * 6
+  let fallback: Polygon | MultiPolygon | null = null
+
+  for (let zoom = ENCLOSING_ADMIN_MAX_ZOOM; zoom >= ENCLOSING_ADMIN_MIN_ZOOM; zoom -= 1) {
+    const result = await fetchNominatimReverseBoundary(
+      latitude,
+      longitude,
+      zoom,
+      contactEmail,
+    )
+    if (!result.ok) {
+      continue
+    }
+
+    const diagonal = geometryBboxDiagonalMeters(result.geometry, latitude)
+    if (diagonal >= minDiagonal && diagonal <= maxDiagonal) {
+      return result.geometry
+    }
+
+    if (diagonal >= minDiagonal) {
+      fallback = result.geometry
+    }
+  }
+
+  return fallback
+}
+
+export async function resolveBoundaryForMask(
+  osmType: NominatimOsmType,
+  osmId: number,
+  contactEmail = NOMINATIM_DEFAULT_CONTACT_EMAIL,
+  radiusMeters?: number,
+): Promise<
+  | { ok: true; geometry: Polygon | MultiPolygon }
+  | { ok: false; status: number; error: string }
+> {
+  const primary = await fetchNominatimBoundary(osmType, osmId, contactEmail)
+  if (!primary.ok) {
+    return primary
+  }
+
+  if (
+    radiusMeters == null ||
+    !boundaryNeedsEnclosingAdmin(primary.geometry, radiusMeters)
+  ) {
+    return primary
+  }
+
+  const center = geometryBboxCenter(primary.geometry)
+  const enclosing = await fetchEnclosingAdminBoundary(
+    center.latitude,
+    center.longitude,
+    radiusMeters,
+    contactEmail,
+  )
+
+  if (enclosing) {
+    return { ok: true, geometry: enclosing }
+  }
+
+  return primary
 }

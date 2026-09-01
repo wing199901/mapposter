@@ -172,11 +172,18 @@ export function EditorApp() {
               ? `Suggested map radius ${Math.round(suggested)} m from place size. The preview updates live.`
               : "Place found. The preview updates live.",
           )
-        } catch {
+        } catch (error) {
           if (!cancelled) {
-            setPlaceLookupMessage(
-              "Place lookup failed — check spelling, or use Coordinates.",
-            )
+            const message = error instanceof Error ? error.message : ""
+            if (message.startsWith("429:")) {
+              setPlaceLookupMessage(
+                "Geocoding service is busy — wait a moment and try again.",
+              )
+            } else {
+              setPlaceLookupMessage(
+                "Place lookup failed — check spelling, or use Coordinates.",
+              )
+            }
           }
         } finally {
           if (!cancelled) {

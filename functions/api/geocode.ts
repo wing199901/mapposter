@@ -26,7 +26,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   const upstream = await geocodeFromNominatim(city, country, context.env)
   if (!upstream.ok) {
-    const status = upstream.status === 404 ? 404 : 502
+    const status =
+      upstream.status === 404 ? 404 : upstream.status === 429 ? 429 : 502
     return Response.json(
       { error: upstream.error },
       {

@@ -50,8 +50,9 @@ export function writeDevEdgeGeocode(
 export function readDevEdgeBoundary(
   osmType: string,
   osmId: number,
+  radiusMeters?: number,
 ): DevBoundaryCacheEntry | null {
-  const key = boundaryCacheKey(osmType, osmId)
+  const key = boundaryCacheKey(osmType, osmId, radiusMeters)
   const cached = devBoundaryCache.get(key)
   if (!cached || isCacheStale(cached.fetchedAt)) {
     if (cached) {
@@ -66,8 +67,9 @@ export function writeDevEdgeBoundary(
   osmType: string,
   osmId: number,
   geometry: Polygon | MultiPolygon,
+  radiusMeters?: number,
 ): void {
-  devBoundaryCache.set(boundaryCacheKey(osmType, osmId), {
+  devBoundaryCache.set(boundaryCacheKey(osmType, osmId, radiusMeters), {
     geometry,
     fetchedAt: Date.now(),
   })

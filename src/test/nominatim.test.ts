@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  buildGeocodeSearchAttempts,
   buildNominatimSearchUrl,
   buildNominatimUserAgent,
   centerFromBoundingBox,
@@ -16,10 +17,22 @@ describe("nominatim request helpers", () => {
   })
 
   it("includes the email query parameter", () => {
-    const url = new URL(buildNominatimSearchUrl("Paris", "France", "ops@example.com"))
+    const url = new URL(buildNominatimSearchUrl({ q: "Paris, France" }, "ops@example.com"))
     expect(url.searchParams.get("q")).toBe("Paris, France")
     expect(url.searchParams.get("email")).toBe("ops@example.com")
     expect(url.searchParams.get("format")).toBe("json")
+    expect(url.searchParams.get("polygon_geojson")).toBeNull()
+  })
+
+  it("prefers HK-scoped geocode queries for Hong Kong places", () => {
+    const attempts = buildGeocodeSearchAttempts("Hong Kong Island", "Hong Kong")
+    expect(attempts[0]).toEqual({
+      q: "Hong Kong Island, Hong Kong",
+      countrycodes: "hk",
+    })
+    expect(attempts.some((attempt) => attempt.q === "Hong Kong Island" && attempt.countrycodes === "hk")).toBe(
+      true,
+    )
   })
 
   it("centers on the geometric midpoint of a bounding box", () => {

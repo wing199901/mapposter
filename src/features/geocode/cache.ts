@@ -67,8 +67,12 @@ export function geocodeCacheKey(query: GeocodeQuery): string {
   return sharedGeocodeCacheKey(query.city, query.country)
 }
 
-export function placeBoundaryCacheKey(osmType: string, osmId: number): string {
-  return boundaryCacheKey(osmType, osmId)
+export function placeBoundaryCacheKey(
+  osmType: string,
+  osmId: number,
+  radiusMeters?: number,
+): string {
+  return boundaryCacheKey(osmType, osmId, radiusMeters)
 }
 
 export async function readGeocodeCache(key: string): Promise<GeocodeBundle | undefined> {

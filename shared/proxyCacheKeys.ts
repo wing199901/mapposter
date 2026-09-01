@@ -9,12 +9,21 @@ export function edgeGeocodeKvKey(city: string, country: string): string {
   return `geocode:${geocodeCacheKey(city, country)}`
 }
 
-export function boundaryCacheKey(osmType: string, osmId: number): string {
-  return `${osmType}:${osmId}`
+export function boundaryCacheKey(
+  osmType: string,
+  osmId: number,
+  radiusMeters?: number,
+): string {
+  const base = `${osmType}:${osmId}`
+  return radiusMeters != null ? `${base}:r${radiusMeters}` : base
 }
 
-export function edgeBoundaryKvKey(osmType: string, osmId: number): string {
-  return `boundary:${boundaryCacheKey(osmType, osmId)}`
+export function edgeBoundaryKvKey(
+  osmType: string,
+  osmId: number,
+  radiusMeters?: number,
+): string {
+  return `boundary:${boundaryCacheKey(osmType, osmId, radiusMeters)}`
 }
 
 export function isCacheStale(fetchedAt: number, ttlMs = CACHE_TTL_MS): boolean {
