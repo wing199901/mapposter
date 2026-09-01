@@ -36,6 +36,11 @@ describe("script detection", () => {
     expect(formatCityLabel("Paris")).toBe("P A R I S")
   })
 
+  it("preserves word gaps in multi-word latin city labels", () => {
+    expect(formatCityLabel("Kwun Tong")).toBe("K W U N\u2003T O N G")
+    expect(formatCityLabel("New York")).toBe("N E W\u2003Y O R K")
+  })
+
   it("preserves non-latin labels", () => {
     expect(isLatinScript("東京")).toBe(false)
     expect(formatCityLabel("東京")).toBe("東京")

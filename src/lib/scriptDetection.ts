@@ -10,12 +10,24 @@ export function isLatinScript(text: string): boolean {
   return latinCount / letters.length > 0.8
 }
 
+/** Em space between words — survives HTML whitespace collapsing unlike regular spaces. */
+const LATIN_LABEL_WORD_GAP = "\u2003"
+
+function letterSpaceWord(word: string): string {
+  return [...word.toUpperCase()].join(" ")
+}
+
 export function formatCityLabel(text: string): string {
   if (!isLatinScript(text)) {
     return text
   }
 
-  return [...text.toUpperCase()].join(" ")
+  const words = text.trim().split(/\s+/).filter((word) => word.length > 0)
+  if (words.length === 0) {
+    return text
+  }
+
+  return words.map(letterSpaceWord).join(LATIN_LABEL_WORD_GAP)
 }
 
 export function formatCoordinates(latitude: number, longitude: number): string {
