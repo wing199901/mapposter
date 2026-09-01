@@ -3,7 +3,7 @@ import type { StyleSpecification } from "maplibre-gl"
 import type { PosterLayerVisibility, PosterTheme } from "@/lib/types"
 import { DEFAULT_LAYER_VISIBILITY } from "@/lib/types"
 
-import { OPENFREEMAP_GLYPHS, OPENFREEMAP_TILEJSON } from "./constants"
+import { OPENFREEMAP_GLYPHS, OPENFREEMAP_TILEJSON, WATER_SOURCE_MINZOOM } from "./constants"
 
 export interface PosterMapStyleOptions {
   layerVisibility?: PosterLayerVisibility
@@ -12,13 +12,25 @@ export interface PosterMapStyleOptions {
 type LineLayer = Extract<StyleSpecification["layers"][number], { type: "line" }>
 type FillLayer = Extract<StyleSpecification["layers"][number], { type: "fill" }>
 
-/** Surface roads only — skip bridge/tunnel duplicates from OpenMapTiles. */
+const WATER_LAYER_FILTER = ["!=", ["get", "brunnel"], "tunnel"] as FillLayer["filter"]
+const WATER_HIRES_SOURCE_ID = "openmaptiles-water-hires"
+
+/** OSM tags some marine areas (e.g. Victoria Harbour) as park class=conservation. */
+const PARK_LAYER_FILTER = ["!=", ["get", "class"], "conservation"] as FillLayer["filter"]
+
+/** landcover grass/wood is often mis-tagged over narrow water at low zoom. */
+const PARK_LANDCOVER_FILTER = [
+  "==",
+  ["get", "class"],
+  "forest",
+] as FillLayer["filter"]
+
+/** Hide minor-road tunnel duplicates; keep major tunnels (harbour crossings, TKO links). */
 const SURFACE_ROAD_FILTER = [
-  "match",
-  ["get", "brunnel"],
-  ["bridge", "tunnel"],
-  false,
-  true,
+  "any",
+  ["!", ["has", "brunnel"]],
+  ["!=", ["get", "brunnel"], "tunnel"],
+  ["match", ["get", "class"], ["motorway", "trunk", "primary"], true, false],
 ] as NonNullable<LineLayer["filter"]>
 
 function withSurfaceFilter(filter: LineLayer["filter"]): LineLayer["filter"] {
@@ -43,7 +55,7 @@ function roadLayer(
     source: "openmaptiles",
     "source-layer": "transportation",
     filter: withSurfaceFilter(filter),
-    layout: { "line-cap": "round", "line-join": "round" },
+    layout: { "line-cap": "butt", "line-join": "miter" },
     paint: {
       "line-color": color,
       "line-width": [
@@ -82,16 +94,17 @@ export function mapFeatureLayerIds(
   const layers: string[] = []
 
   if (v.water) layers.push("water")
-  if (v.waterway) layers.push("waterway")
   if (v.parks) {
     layers.push("parks", "parks-landcover")
   }
   if (v.buildings) layers.push("buildings")
+  if (v.water) layers.push("water-detail")
+  if (v.waterway) layers.push("waterway")
   if (v.roadResidential) layers.push("road-residential")
   if (v.roadTertiary) layers.push("road-tertiary")
   if (v.roadSecondary) layers.push("road-secondary")
   if (v.roadPrimary) layers.push("road-primary")
-  if (v.roadMotorway) layers.push("road-motorway")
+  if (v.roadMotorway) layers.push("road-motorway", "road-bridge-deck")
   if (v.roadDefault) layers.push("road-default")
   if (v.rail) layers.push("road-rail")
   if (v.shipRoutes) layers.push("road-ferry")
@@ -119,22 +132,8 @@ export function themeToMapStyle(
       type: "fill",
       source: "openmaptiles",
       "source-layer": "water",
-      filter: ["!=", ["get", "brunnel"], "tunnel"],
+      filter: WATER_LAYER_FILTER,
       paint: { "fill-color": theme.water },
-    })
-  }
-
-  if (v.waterway) {
-    layers.push({
-      id: "waterway",
-      type: "line",
-      source: "openmaptiles",
-      "source-layer": "waterway",
-      filter: ["!=", ["get", "brunnel"], "tunnel"],
-      paint: {
-        "line-color": theme.water,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.5, 14, 1.5],
-      },
     })
   }
 
@@ -145,6 +144,7 @@ export function themeToMapStyle(
         type: "fill",
         source: "openmaptiles",
         "source-layer": "park",
+        filter: PARK_LAYER_FILTER,
         paint: { "fill-color": theme.parks },
       },
       {
@@ -152,7 +152,7 @@ export function themeToMapStyle(
         type: "fill",
         source: "openmaptiles",
         "source-layer": "landcover",
-        filter: ["match", ["get", "class"], ["grass", "wood", "forest"], true, false],
+        filter: PARK_LANDCOVER_FILTER,
         paint: { "fill-color": theme.parks },
       },
     )
@@ -166,6 +166,32 @@ export function themeToMapStyle(
       "source-layer": "building",
       paint: { "fill-color": theme.buildings, "fill-opacity": 0.85 },
     } satisfies FillLayer)
+  }
+
+  // Hi-res water after parks/buildings so narrow bays (Victoria Harbour) aren't covered by landcover.
+  if (v.water) {
+    layers.push({
+      id: "water-detail",
+      type: "fill",
+      source: WATER_HIRES_SOURCE_ID,
+      "source-layer": "water",
+      filter: WATER_LAYER_FILTER,
+      paint: { "fill-color": theme.water },
+    })
+  }
+
+  if (v.waterway) {
+    layers.push({
+      id: "waterway",
+      type: "line",
+      source: "openmaptiles",
+      "source-layer": "waterway",
+      filter: WATER_LAYER_FILTER,
+      paint: {
+        "line-color": theme.water,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 14, 1.5],
+      },
+    })
   }
 
   if (v.roadResidential) {
@@ -208,8 +234,25 @@ export function themeToMapStyle(
       roadLayer(
         "road-motorway",
         theme.road_motorway,
-        ["all", ["==", ["get", "class"], "motorway"], ["!=", ["get", "ramp"], 1]],
+        [
+          "all",
+          ["==", ["get", "class"], "motorway"],
+          [
+            "any",
+            ["!=", ["get", "ramp"], 1],
+            ["==", ["get", "brunnel"], "bridge"],
+            ["==", ["get", "brunnel"], "tunnel"],
+          ],
+        ],
         2.8,
+      ),
+    )
+    layers.push(
+      roadLayer(
+        "road-bridge-deck",
+        theme.road_motorway,
+        ["==", ["get", "class"], "bridge"],
+        2.4,
       ),
     )
   }
@@ -237,6 +280,11 @@ export function themeToMapStyle(
       openmaptiles: {
         type: "vector",
         url: OPENFREEMAP_TILEJSON,
+      },
+      [WATER_HIRES_SOURCE_ID]: {
+        type: "vector",
+        url: OPENFREEMAP_TILEJSON,
+        minzoom: WATER_SOURCE_MINZOOM,
       },
     },
     layers,
