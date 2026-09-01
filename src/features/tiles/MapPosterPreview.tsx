@@ -9,12 +9,17 @@ import {
 import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
-import { syncBoundaryMaskLayer } from "@/features/boundary/syncBoundaryMaskLayer"
+import { BoundaryBlurOverlay } from "@/features/boundary/BoundaryBlurOverlay"
 import { formatCityLabel, formatCoordinates } from "@/lib/scriptDetection"
 import type { PosterConfig, PosterTheme } from "@/lib/types"
 
-import { EXPORT_ATTRIBUTION, MAP_BAND_HEIGHT_RATIO } from "./constants"
+import { EXPORT_ATTRIBUTION } from "./constants"
 import type { MapPosterHandle } from "./mapPosterRef"
+import {
+  POSTER_ATTRIBUTION_FROM_RIGHT,
+  posterTypographyLayout,
+} from "./posterTypographyLayout"
+import { posterBottomVignetteCss, posterTopVignetteCss } from "./posterVignette"
 import { previewDisplaySize } from "./previewDisplaySize"
 import { themeToMapStyle } from "./themeToMapStyle"
 import { mapViewToRadiusMeters, viewportToMapView } from "./viewportToMapView"
@@ -38,6 +43,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
     const mapRef = useRef<maplibregl.Map | null>(null)
     const skipMoveEndRef = useRef(false)
     const [mapLoaded, setMapLoaded] = useState(false)
+    const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null)
     const [displaySize, setDisplaySize] = useState({ widthPx: 360, heightPx: 480 })
 
     useImperativeHandle(ref, () => ({
@@ -85,7 +91,8 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
           return
         }
         const width = containerRef.current.clientWidth
-        if (width <= 0) {
+        const height = containerRef.current.clientHeight
+        if (width <= 0 || height <= 0) {
           return
         }
 
@@ -98,18 +105,15 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
           zoom,
           attributionControl: false,
           interactive: true,
+          canvasContextAttributes: { preserveDrawingBuffer: true },
         })
 
         mapRef.current = map
+        setMapInstance(map)
         onReadyChange(false)
 
         map.on("load", () => {
           setMapLoaded(true)
-          syncBoundaryMaskLayer(map!, {
-            enabled: config.boundaryMaskEnabled,
-            backgroundColor: theme.bg,
-            boundary: boundaryGeometry,
-          })
           onReadyChange(true)
         })
 
@@ -150,6 +154,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
         onReadyChange(false)
         map?.remove()
         mapRef.current = null
+        setMapInstance(null)
         setMapLoaded(false)
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- init once
@@ -163,11 +168,6 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
       onReadyChange(false)
       map.setStyle(themeToMapStyle(theme, { layerVisibility: config.layerVisibility }))
       map.once("idle", () => {
-        syncBoundaryMaskLayer(map, {
-          enabled: config.boundaryMaskEnabled,
-          backgroundColor: theme.bg,
-          boundary: boundaryGeometry,
-        })
         onReadyChange(true)
       })
     }, [theme, config.layerVisibility, mapLoaded, onReadyChange])
@@ -177,12 +177,8 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
       if (!map || !mapLoaded) {
         return
       }
-      syncBoundaryMaskLayer(map, {
-        enabled: config.boundaryMaskEnabled,
-        backgroundColor: theme.bg,
-        boundary: boundaryGeometry,
-      })
-    }, [boundaryGeometry, config.boundaryMaskEnabled, theme.bg, mapLoaded])
+      map.resize()
+    }, [displaySize.widthPx, displaySize.heightPx, mapLoaded])
 
     useEffect(() => {
       const map = mapRef.current
@@ -214,6 +210,8 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
 
     const city = formatCityLabel(config.display.city)
     const coords = formatCoordinates(config.viewport.latitude, config.viewport.longitude)
+    const typography = posterTypographyLayout(displaySize.widthPx, displaySize.heightPx)
+    const { fonts, fromBottom, fadeBottomStart } = typography
 
     const overlayStyle = {
       "--poster-text": theme.text,
@@ -223,6 +221,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
     return (
       <div ref={slotRef} className="flex w-full justify-center">
         <div
+          data-poster-shell
           className="relative shrink-0 overflow-hidden shadow-lg"
           style={{
             width: displaySize.widthPx,
@@ -231,42 +230,82 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             ...overlayStyle,
           }}
         >
-          <div
-            ref={containerRef}
-            className="absolute inset-x-0 top-0"
-            style={{ height: `${MAP_BAND_HEIGHT_RATIO * 100}%` }}
+          <div className="absolute inset-0 overflow-hidden">
+            <div ref={containerRef} className="size-full" />
+          </div>
+          <BoundaryBlurOverlay
+            map={mapInstance}
+            boundary={boundaryGeometry}
+            enabled={config.boundaryMaskEnabled}
+            backgroundColor={theme.bg}
           />
           <div
-            className="pointer-events-none absolute inset-x-0 top-0"
+            className="pointer-events-none absolute inset-0 z-2"
             style={{
-              height: `${MAP_BAND_HEIGHT_RATIO * 100}%`,
-              background: `linear-gradient(to bottom, transparent 45%, var(--poster-gradient) 100%)`,
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              maskImage: `linear-gradient(to bottom, transparent ${fadeBottomStart * 100}%, black 100%)`,
+              WebkitMaskImage: `linear-gradient(to bottom, transparent ${fadeBottomStart * 100}%, black 100%)`,
             }}
           />
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-1 px-4 pb-3 text-center"
-            style={{ color: "var(--poster-text)" }}
+            className="pointer-events-none absolute inset-0 z-3"
+            style={{ background: posterTopVignetteCss() }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 z-3"
+            style={{ background: posterBottomVignetteCss(fadeBottomStart) }}
+          />
+          <p
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-bold tracking-wide"
+            style={{
+              bottom: `${fromBottom.city * 100}%`,
+              color: theme.text,
+              fontSize: fonts.city,
+            }}
           >
-            <p
-              className="font-bold tracking-wide"
-              style={{ fontSize: Math.max(14, displaySize.widthPx * 0.055) }}
-            >
-              {city}
-            </p>
-            <div className="h-px w-1/3 bg-current opacity-80" />
-            <p className="font-medium" style={{ fontSize: Math.max(11, displaySize.widthPx * 0.028) }}>
-              {config.display.country}
-            </p>
-            <p className="opacity-80" style={{ fontSize: Math.max(10, displaySize.widthPx * 0.018) }}>
-              {coords}
-            </p>
-            <p
-              className="self-end opacity-70"
-              style={{ fontSize: Math.max(8, displaySize.widthPx * 0.012) }}
-            >
-              {EXPORT_ATTRIBUTION}
-            </p>
-          </div>
+            {city}
+          </p>
+          <div
+            className="pointer-events-none absolute left-1/2 z-10 h-px -translate-x-1/2 bg-current opacity-80"
+            style={{
+              bottom: `${fromBottom.line * 100}%`,
+              width: "33%",
+              color: theme.text,
+            }}
+          />
+          <p
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-medium"
+            style={{
+              bottom: `${fromBottom.country * 100}%`,
+              color: theme.text,
+              fontSize: fonts.country,
+            }}
+          >
+            {config.display.country}
+          </p>
+          <p
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 opacity-80"
+            style={{
+              bottom: `${fromBottom.coordinates * 100}%`,
+              color: theme.text,
+              fontSize: fonts.coordinates,
+            }}
+          >
+            {coords}
+          </p>
+          <p
+            className="pointer-events-none absolute z-10 opacity-50"
+            style={{
+              right: `${POSTER_ATTRIBUTION_FROM_RIGHT * 100}%`,
+              bottom: `${fromBottom.attribution * 100}%`,
+              color: theme.text,
+              fontSize: fonts.attribution,
+              lineHeight: 1,
+            }}
+          >
+            {EXPORT_ATTRIBUTION}
+          </p>
         </div>
       </div>
     )
