@@ -47,6 +47,7 @@ describe("posterTypographyLayout export presets", () => {
       cityLatin: "Kyoto",
       country: "日本",
       countryLatin: "Japan",
+      hasPlaceLocalName: true,
       scriptFamily: "jp",
     })
 
@@ -67,5 +68,31 @@ describe("posterTypographyLayout export presets", () => {
     expect(lines.city.local).toBe("H O N G\u2003K O N G\u2003I S L A N D")
     expect(lines.city.latin).toBeUndefined()
     expect(lines.city.applyLatinTracking).toBe(true)
+  })
+
+  it("keeps pair layout when place local exists even if country latin is missing", () => {
+    const lines = formatPosterDisplayLines({
+      city: "京都",
+      cityLatin: "Kyoto",
+      country: "日本",
+      hasPlaceLocalName: true,
+      scriptFamily: "jp",
+    })
+    expect(lines.isPairLayout).toBe(true)
+    expect(lines.city.applyLatinTracking).toBe(false)
+  })
+
+  it("does not stuff latin country into local slot when local country is missing", () => {
+    const lines = formatPosterDisplayLines({
+      city: "京都",
+      cityLatin: "Kyoto",
+      country: "",
+      countryLatin: "Japan",
+      hasPlaceLocalName: true,
+      scriptFamily: "jp",
+    })
+    expect(lines.isPairLayout).toBe(true)
+    expect(lines.country.local).toBeUndefined()
+    expect(lines.country.latin).toBe("Japan")
   })
 })

@@ -31,13 +31,13 @@ describe("nominatim request helpers", () => {
     const parsed = parseNominatimNameDetails({
       display_name: "Kyoto, Kyoto, Japan",
       namedetails: {
+        "name:zh": "京都",
         "name:ja": "京都",
         "name:en": "Kyoto",
       },
       address: {
-        "country:ja": "日本",
-        "country:en": "Japan",
-        country: "Japan",
+        country: "日本",
+        country_code: "jp",
       },
     })
     expect(parsed).toEqual({
@@ -45,7 +45,42 @@ describe("nominatim request helpers", () => {
       placeLatinName: "Kyoto",
       countryLocalName: "日本",
       countryLatinName: "Japan",
-      countryCode: undefined,
+      countryCode: "jp",
+    })
+  })
+
+  it("includes zh-Hans local names for simplified Chinese places", () => {
+    const parsed = parseNominatimNameDetails({
+      display_name: "Guangzhou, Guangdong, China",
+      namedetails: {
+        "name:zh-Hans": "广州",
+        "name:en": "Guangzhou",
+      },
+      address: {
+        country: "中国",
+        country_code: "cn",
+      },
+    })
+    expect(parsed.placeLocalName).toBe("广州")
+  })
+
+  it("does not invent country local when only latin country is available", () => {
+    const parsed = parseNominatimNameDetails({
+      display_name: "Kyoto, Kyoto, Japan",
+      namedetails: {
+        "name:ja": "京都",
+        "name:en": "Kyoto",
+      },
+      address: {
+        country: "Japan",
+        country_code: "jp",
+      },
+    })
+    expect(parsed).toMatchObject({
+      placeLocalName: "京都",
+      countryLocalName: undefined,
+      countryLatinName: "Japan",
+      countryCode: "jp",
     })
   })
 
