@@ -148,18 +148,18 @@ function drawPosterTypography(
   if (lines.city.latin) {
     const cityLatinFontSize = Math.max(fonts.country, Math.round(fonts.city * 0.45))
     ctx.font = `700 ${fonts.city}px ${fontStack}`
-    const localWidth = ctx.measureText(lines.city.local).width
+    const localWidth = ctx.measureText(lines.city.local ?? "").width
     ctx.font = `500 ${cityLatinFontSize}px ${fontStack}`
     const latinWidth = ctx.measureText(lines.city.latin).width
     const gap = Math.max(8, Math.round(fonts.country * 0.3))
     const startX = widthPx / 2 - (localWidth + gap + latinWidth) / 2
     ctx.font = `700 ${fonts.city}px ${fontStack}`
-    ctx.fillText(lines.city.local, startX + localWidth / 2, y(fromBottom.city))
+    ctx.fillText(lines.city.local ?? "", startX + localWidth / 2, y(fromBottom.city))
     ctx.font = `500 ${cityLatinFontSize}px ${fontStack}`
     ctx.fillText(lines.city.latin, startX + localWidth + gap + latinWidth / 2, y(fromBottom.city))
   } else {
     ctx.font = `700 ${fonts.city}px ${fontStack}`
-    ctx.fillText(lines.city.local, widthPx / 2, y(fromBottom.city))
+    ctx.fillText(lines.city.local ?? "", widthPx / 2, y(fromBottom.city))
   }
 
   ctx.strokeStyle = theme.text
@@ -174,13 +174,13 @@ function drawPosterTypography(
   if (lines.country.latin) {
     const countryLatinFontSize = Math.max(fonts.coordinates, Math.round(fonts.country * 0.65))
     ctx.font = `500 ${fonts.country}px ${fontStack}`
-    const localWidth = ctx.measureText(lines.country.local).width
+    const localWidth = ctx.measureText(lines.country.local ?? "").width
     ctx.font = `400 ${countryLatinFontSize}px ${fontStack}`
     const latinWidth = ctx.measureText(lines.country.latin).width
     const gap = Math.max(6, Math.round(fonts.country * 0.25))
     const startX = widthPx / 2 - (localWidth + gap + latinWidth) / 2
     ctx.font = `500 ${fonts.country}px ${fontStack}`
-    ctx.fillText(lines.country.local, startX + localWidth / 2, y(fromBottom.country))
+    ctx.fillText(lines.country.local ?? "", startX + localWidth / 2, y(fromBottom.country))
     ctx.font = `400 ${countryLatinFontSize}px ${fontStack}`
     ctx.fillText(
       lines.country.latin,
@@ -189,7 +189,7 @@ function drawPosterTypography(
     )
   } else {
     ctx.font = `500 ${fonts.country}px ${fontStack}`
-    ctx.fillText(lines.country.local, widthPx / 2, y(fromBottom.country))
+    ctx.fillText(lines.country.local ?? "", widthPx / 2, y(fromBottom.country))
   }
 
   ctx.font = `400 ${fonts.coordinates}px ${fontStack}`
@@ -314,9 +314,9 @@ function typographySvg(
   const countryGap = Math.max(6, Math.round(fonts.country * 0.25))
 
   return `
-    <text x="${widthPx / 2}" y="${y(fromBottom.city)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.city}" font-weight="700" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.city.local)}${lines.city.latin ? `<tspan dx="${cityGap}" font-size="${cityLatinSize}" font-weight="500">${escapeXml(lines.city.latin)}</tspan>` : ""}</text>
+    <text x="${widthPx / 2}" y="${y(fromBottom.city)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.city}" font-weight="700" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.city.local ?? "")}${lines.city.latin ? `<tspan dx="${cityGap}" font-size="${cityLatinSize}" font-weight="500">${escapeXml(lines.city.latin)}</tspan>` : ""}</text>
     <line x1="${widthPx * 0.35}" y1="${y(fromBottom.line)}" x2="${widthPx * 0.65}" y2="${y(fromBottom.line)}" stroke="${theme.text}" stroke-width="${lineWidth}" />
-    <text x="${widthPx / 2}" y="${y(fromBottom.country)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.country}" font-weight="500" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.country.local)}${lines.country.latin ? `<tspan dx="${countryGap}" font-size="${countryLatinSize}" font-weight="400">${escapeXml(lines.country.latin)}</tspan>` : ""}</text>
+    <text x="${widthPx / 2}" y="${y(fromBottom.country)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.country}" font-weight="500" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.country.local ?? "")}${lines.country.latin ? `<tspan dx="${countryGap}" font-size="${countryLatinSize}" font-weight="400">${escapeXml(lines.country.latin)}</tspan>` : ""}</text>
     <text x="${widthPx / 2}" y="${y(fromBottom.coordinates)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.coordinates}" font-weight="400" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(coords)}</text>
     <text x="${widthPx * (1 - POSTER_ATTRIBUTION_FROM_RIGHT)}" y="${y(fromBottom.attribution)}" fill="${theme.text}" fill-opacity="0.5" font-family="${escapeXml(fontStack)}" font-size="${fonts.attribution}" font-weight="400" text-anchor="end" dominant-baseline="alphabetic">${escapeXml(EXPORT_ATTRIBUTION)}</text>
   `
