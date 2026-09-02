@@ -28,10 +28,12 @@ import {
 import { ThemeSwatchCard } from "@/features/editor/ThemeSwatchCard"
 import { usePosterGenerator } from "@/features/editor/usePosterGenerator"
 import { geocodeCity } from "@/features/geocode/nominatim"
+import { displayLabelsFromGeocodeResult } from "@/features/geocode/displayLabels"
 import { usePlaceBoundary } from "@/features/boundary/usePlaceBoundary"
 import { MapPosterPreview } from "@/features/tiles/MapPosterPreview"
 import type { MapPosterHandle } from "@/features/tiles/mapPosterRef"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
+import { ensureNotoFamilyLoaded, notoFamilyForScript } from "@/lib/notoFonts"
 import type { PosterTheme } from "@/lib/types"
 import { encodePosterState } from "@/lib/urlState"
 import {
@@ -94,6 +96,10 @@ export function EditorApp() {
   const shareLink = `${window.location.origin}${window.location.pathname}#p=${encodePosterState(config)}`
 
   useEffect(() => {
+    ensureNotoFamilyLoaded(config.display.scriptFamily)
+  }, [config.display.scriptFamily])
+
+  useEffect(() => {
     setPlaceCity(config.geocode.city)
     setPlaceCountry(config.geocode.country)
   }, [config.geocode.city, config.geocode.country])
@@ -112,11 +118,7 @@ export function EditorApp() {
       setConfig((current) => {
         const placeChanged =
           current.geocode.city !== placeCity || current.geocode.country !== placeCountry
-        if (
-          !placeChanged &&
-          current.display.city === placeCity &&
-          current.display.country === placeCountry
-        ) {
+        if (!placeChanged) {
           return current
         }
 
@@ -125,7 +127,6 @@ export function EditorApp() {
           // Changing City/Country unlocks auto-center for the next lookup.
           centerLocked: placeChanged ? false : current.centerLocked,
           geocode: { city: placeCity, country: placeCountry },
-          display: { city: placeCity, country: placeCountry },
         }
       })
     }, 200)
@@ -150,10 +151,15 @@ export function EditorApp() {
           }
 
           const suggested = result.suggestedRadiusMeters
+          const nextDisplay = displayLabelsFromGeocodeResult(result)
           setConfig((current) => ({
             ...current,
             geocode: { city: placeCity, country: placeCountry },
-            display: { city: placeCity, country: placeCountry },
+            display: nextDisplay,
+            fontFamily:
+              nextDisplay.scriptFamily != null
+                ? notoFamilyForScript(nextDisplay.scriptFamily)
+                : current.fontFamily,
             placeOsmType: result.osmType,
             placeOsmId: result.osmId,
             viewport: {

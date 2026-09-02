@@ -10,7 +10,8 @@ import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
 import { BoundaryBlurOverlay } from "@/features/boundary/BoundaryBlurOverlay"
-import { formatCityLabel, formatCoordinates } from "@/lib/scriptDetection"
+import { posterFontStack } from "@/lib/notoFonts"
+import { formatCoordinates, formatPosterDisplayLines } from "@/lib/scriptDetection"
 import type { PosterConfig, PosterTheme } from "@/lib/types"
 
 import { EXPORT_ATTRIBUTION } from "./constants"
@@ -208,10 +209,11 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
       mapLoaded,
     ])
 
-    const city = formatCityLabel(config.display.city)
+    const displayLines = formatPosterDisplayLines(config.display)
     const coords = formatCoordinates(config.viewport.latitude, config.viewport.longitude)
     const typography = posterTypographyLayout(displaySize.widthPx, displaySize.heightPx)
     const { fonts, fromBottom, fadeBottomStart } = typography
+    const fontStack = posterFontStack(config.fontFamily, config.display.scriptFamily)
 
     const overlayStyle = {
       "--poster-text": theme.text,
@@ -257,14 +259,25 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             style={{ background: posterBottomVignetteCss(fadeBottomStart) }}
           />
           <p
-            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-bold tracking-wide"
+            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-bold ${
+              displayLines.city.applyLatinTracking ? "tracking-wide" : ""
+            }`}
             style={{
               bottom: `${fromBottom.city * 100}%`,
               color: theme.text,
               fontSize: fonts.city,
+              fontFamily: fontStack,
             }}
           >
-            {city}
+            {displayLines.city.local}
+            {displayLines.city.latin ? (
+              <span
+                className="ml-2 align-baseline font-medium"
+                style={{ fontSize: Math.max(fonts.country, Math.round(fonts.city * 0.45)) }}
+              >
+                {displayLines.city.latin}
+              </span>
+            ) : null}
           </p>
           <div
             className="pointer-events-none absolute left-1/2 z-10 h-px -translate-x-1/2 bg-current opacity-80"
@@ -280,9 +293,18 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
               bottom: `${fromBottom.country * 100}%`,
               color: theme.text,
               fontSize: fonts.country,
+              fontFamily: fontStack,
             }}
           >
-            {config.display.country}
+            {displayLines.country.local}
+            {displayLines.country.latin ? (
+              <span
+                className="ml-2 align-baseline font-normal"
+                style={{ fontSize: Math.max(fonts.coordinates, Math.round(fonts.country * 0.65)) }}
+              >
+                {displayLines.country.latin}
+              </span>
+            ) : null}
           </p>
           <p
             className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 opacity-80"

@@ -76,6 +76,8 @@ export function buildNominatimSearchUrl(
     q: attempt.q,
     format: "json",
     limit: "1",
+    namedetails: "1",
+    addressdetails: "1",
     email: contactEmail,
   })
 
@@ -139,6 +141,11 @@ export interface NominatimSearchResult {
   latitude: number
   longitude: number
   displayName: string
+  placeLocalName?: string
+  placeLatinName: string
+  countryLocalName?: string
+  countryLatinName: string
+  countryCode?: string
   suggestedRadiusMeters: number
   osmType?: NominatimOsmType
   osmId?: number
@@ -196,9 +203,104 @@ type NominatimSearchHit = {
   lat: string
   lon: string
   display_name: string
+  namedetails?: Record<string, string>
+  address?: Record<string, string>
   boundingbox?: string[]
   osm_type?: string
   osm_id?: number
+}
+
+type NominatimResolvedNames = Pick<
+  NominatimSearchResult,
+  "placeLocalName" | "placeLatinName" | "countryLocalName" | "countryLatinName" | "countryCode"
+>
+
+const PLACE_LOCAL_KEYS = ["name:zh-Hant", "name:zh", "name:ja", "name:ko"] as const
+const PLACE_LATIN_KEYS = ["name:en", "name:latin"] as const
+const LATIN_RANGE = /[\u0000-\u024F]/u
+
+function pickFirstString(
+  source: Record<string, string> | undefined,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = source?.[key]?.trim()
+    if (value) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function isMostlyLatin(text: string): boolean {
+  const letters = [...text].filter((char) => /\p{L}/u.test(char))
+  if (letters.length === 0) {
+    return true
+  }
+  const latinCount = letters.filter((char) => LATIN_RANGE.test(char)).length
+  return latinCount / letters.length > 0.8
+}
+
+function fallbackNameFromDisplayName(displayName: string, index: number): string | undefined {
+  const parts = displayName
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+  return parts[index]
+}
+
+function countryKeysForPlaceLocal(localKey: typeof PLACE_LOCAL_KEYS[number] | undefined): string[] {
+  switch (localKey) {
+    case "name:zh-Hant":
+      return ["country:zh-Hant", "country:zh"]
+    case "name:zh":
+      return ["country:zh", "country:zh-Hant"]
+    case "name:ja":
+      return ["country:ja"]
+    case "name:ko":
+      return ["country:ko"]
+    default:
+      return []
+  }
+}
+
+export function parseNominatimNameDetails(
+  hit: Pick<NominatimSearchHit, "display_name" | "namedetails" | "address">,
+): NominatimResolvedNames {
+  const placeLocalKey = PLACE_LOCAL_KEYS.find((key) => hit.namedetails?.[key]?.trim())
+  const placeLocalName = placeLocalKey ? hit.namedetails?.[placeLocalKey]?.trim() : undefined
+  const placeLatinName =
+    pickFirstString(hit.namedetails, PLACE_LATIN_KEYS) ??
+    fallbackNameFromDisplayName(hit.display_name, 0) ??
+    hit.display_name
+
+  const countryLatinName =
+    pickFirstString(hit.address, ["country:en"]) ??
+    (hit.address?.country && isMostlyLatin(hit.address.country) ? hit.address.country.trim() : undefined) ??
+    fallbackNameFromDisplayName(hit.display_name, 2) ??
+    placeLatinName
+
+  if (!placeLocalName) {
+    return {
+      placeLocalName: undefined,
+      placeLatinName,
+      countryLocalName: undefined,
+      countryLatinName,
+      countryCode: hit.address?.country_code?.trim(),
+    }
+  }
+
+  const countryLocalName =
+    pickFirstString(hit.address, countryKeysForPlaceLocal(placeLocalKey)) ??
+    (hit.address?.country?.trim() || undefined)
+
+  return {
+    placeLocalName,
+    placeLatinName,
+    countryLocalName,
+    countryLatinName,
+    countryCode: hit.address?.country_code?.trim(),
+  }
 }
 
 function parseNominatimSearchHit(hit: NominatimSearchHit | undefined): NominatimSearchResult | null {
@@ -217,11 +319,13 @@ function parseNominatimSearchHit(hit: NominatimSearchHit | undefined): Nominatim
     : 10000
   const osmType = parseOsmType(hit.osm_type)
   const osmId = typeof hit.osm_id === "number" ? hit.osm_id : undefined
+  const names = parseNominatimNameDetails(hit)
 
   return {
     latitude: center.latitude,
     longitude: center.longitude,
     displayName: hit.display_name,
+    ...names,
     suggestedRadiusMeters,
     ...(osmType && osmId != null ? { osmType, osmId } : {}),
   }

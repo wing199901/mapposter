@@ -13,6 +13,9 @@ export interface SerializedPosterState {
   customTheme?: PosterConfig["customTheme"]
   displayCity: string
   displayCountry: string
+  displayCityLatin?: string
+  displayCountryLatin?: string
+  displayScriptFamily?: PosterConfig["display"]["scriptFamily"]
   fontFamily: string
   centerLocked?: boolean
   widthInches: number
@@ -47,6 +50,9 @@ export function serializePosterState(config: PosterConfig): SerializedPosterStat
     customTheme: config.customTheme,
     displayCity: config.display.city,
     displayCountry: config.display.country,
+    displayCityLatin: config.display.cityLatin,
+    displayCountryLatin: config.display.countryLatin,
+    displayScriptFamily: config.display.scriptFamily,
     fontFamily: config.fontFamily,
     centerLocked: config.centerLocked,
     widthInches: config.widthInches,
@@ -74,6 +80,9 @@ export function deserializePosterState(state: SerializedPosterState): PosterConf
     display: {
       city: state.displayCity,
       country: state.displayCountry,
+      cityLatin: state.displayCityLatin,
+      countryLatin: state.displayCountryLatin,
+      scriptFamily: state.displayScriptFamily,
     },
     fontFamily: state.fontFamily,
     centerLocked: state.centerLocked ?? false,

@@ -6,6 +6,7 @@ import {
   buildNominatimUserAgent,
   centerFromBoundingBox,
   NOMINATIM_APP_URL,
+  parseNominatimNameDetails,
   suggestedRadiusFromBoundingBox,
 } from "../../shared/nominatim"
 
@@ -21,7 +22,51 @@ describe("nominatim request helpers", () => {
     expect(url.searchParams.get("q")).toBe("Paris, France")
     expect(url.searchParams.get("email")).toBe("ops@example.com")
     expect(url.searchParams.get("format")).toBe("json")
+    expect(url.searchParams.get("namedetails")).toBe("1")
+    expect(url.searchParams.get("addressdetails")).toBe("1")
     expect(url.searchParams.get("polygon_geojson")).toBeNull()
+  })
+
+  it("parses Kyoto namedetails and address into local/latin place and country names", () => {
+    const parsed = parseNominatimNameDetails({
+      display_name: "Kyoto, Kyoto, Japan",
+      namedetails: {
+        "name:ja": "京都",
+        "name:en": "Kyoto",
+      },
+      address: {
+        "country:ja": "日本",
+        "country:en": "Japan",
+        country: "Japan",
+      },
+    })
+    expect(parsed).toEqual({
+      placeLocalName: "京都",
+      placeLatinName: "Kyoto",
+      countryLocalName: "日本",
+      countryLatinName: "Japan",
+      countryCode: undefined,
+    })
+  })
+
+  it("keeps Paris Latin-only when no CJK namedetails exists", () => {
+    const parsed = parseNominatimNameDetails({
+      display_name: "Paris, Île-de-France, France",
+      namedetails: {
+        "name:en": "Paris",
+      },
+      address: {
+        "country:en": "France",
+        country: "France",
+      },
+    })
+    expect(parsed).toEqual({
+      placeLocalName: undefined,
+      placeLatinName: "Paris",
+      countryLocalName: undefined,
+      countryLatinName: "France",
+      countryCode: undefined,
+    })
   })
 
   it("prefers HK-scoped geocode queries for Hong Kong places", () => {

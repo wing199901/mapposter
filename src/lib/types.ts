@@ -56,9 +56,14 @@ export interface GeocodeQuery {
   country: string
 }
 
+export type ScriptFamily = "hk" | "tc" | "sc" | "jp" | "kr"
+
 export interface DisplayLabels {
   city: string
   country: string
+  cityLatin?: string
+  countryLatin?: string
+  scriptFamily?: ScriptFamily
 }
 
 export interface PosterConfig {
@@ -86,6 +91,11 @@ export interface GeocodeResult {
   latitude: number
   longitude: number
   displayName: string
+  placeLocalName?: string
+  placeLatinName?: string
+  countryLocalName?: string
+  countryLatinName?: string
+  countryCode?: string
   /** Suggested map radius from place bounding box (place-name geocode). */
   suggestedRadiusMeters?: number
   osmType?: OsmType

@@ -2,7 +2,8 @@ import { outsideBoundaryMaskPath } from "@/features/boundary/projectBoundaryToSc
 import type { Feature, GeoJsonProperties, Geometry } from "geojson"
 import type { Map } from "maplibre-gl"
 
-import { formatCityLabel, formatCoordinates } from "@/lib/scriptDetection"
+import { posterFontStack } from "@/lib/notoFonts"
+import { formatCoordinates, formatPosterDisplayLines } from "@/lib/scriptDetection"
 import type { DisplayLabels, PosterLayerVisibility, PosterTheme, Viewport } from "@/lib/types"
 import { DPI } from "@/lib/types"
 
@@ -133,10 +134,9 @@ function drawPosterTypography(
   fontFamily: string,
 ): void {
   const { widthPx, heightPx } = layout
-  const city = formatCityLabel(display.city)
-  const country = display.country
+  const lines = formatPosterDisplayLines(display)
   const coords = formatCoordinates(viewport.latitude, viewport.longitude)
-  const fontStack = `${fontFamily}, Roboto, system-ui, sans-serif`
+  const fontStack = posterFontStack(fontFamily, display.scriptFamily)
   const typography = posterTypographyLayout(widthPx, heightPx)
   const { fonts, lineWidth, fromBottom } = typography
   const y = (fromBottomFraction: number) => heightPx * (1 - fromBottomFraction)
@@ -145,8 +145,22 @@ function drawPosterTypography(
   ctx.textAlign = "center"
   ctx.textBaseline = "alphabetic"
 
-  ctx.font = `700 ${fonts.city}px ${fontStack}`
-  ctx.fillText(city, widthPx / 2, y(fromBottom.city))
+  if (lines.city.latin) {
+    const cityLatinFontSize = Math.max(fonts.country, Math.round(fonts.city * 0.45))
+    ctx.font = `700 ${fonts.city}px ${fontStack}`
+    const localWidth = ctx.measureText(lines.city.local).width
+    ctx.font = `500 ${cityLatinFontSize}px ${fontStack}`
+    const latinWidth = ctx.measureText(lines.city.latin).width
+    const gap = Math.max(8, Math.round(fonts.country * 0.3))
+    const startX = widthPx / 2 - (localWidth + gap + latinWidth) / 2
+    ctx.font = `700 ${fonts.city}px ${fontStack}`
+    ctx.fillText(lines.city.local, startX + localWidth / 2, y(fromBottom.city))
+    ctx.font = `500 ${cityLatinFontSize}px ${fontStack}`
+    ctx.fillText(lines.city.latin, startX + localWidth + gap + latinWidth / 2, y(fromBottom.city))
+  } else {
+    ctx.font = `700 ${fonts.city}px ${fontStack}`
+    ctx.fillText(lines.city.local, widthPx / 2, y(fromBottom.city))
+  }
 
   ctx.strokeStyle = theme.text
   ctx.globalAlpha = 0.8
@@ -157,8 +171,26 @@ function drawPosterTypography(
   ctx.stroke()
   ctx.globalAlpha = 1
 
-  ctx.font = `500 ${fonts.country}px ${fontStack}`
-  ctx.fillText(country, widthPx / 2, y(fromBottom.country))
+  if (lines.country.latin) {
+    const countryLatinFontSize = Math.max(fonts.coordinates, Math.round(fonts.country * 0.65))
+    ctx.font = `500 ${fonts.country}px ${fontStack}`
+    const localWidth = ctx.measureText(lines.country.local).width
+    ctx.font = `400 ${countryLatinFontSize}px ${fontStack}`
+    const latinWidth = ctx.measureText(lines.country.latin).width
+    const gap = Math.max(6, Math.round(fonts.country * 0.25))
+    const startX = widthPx / 2 - (localWidth + gap + latinWidth) / 2
+    ctx.font = `500 ${fonts.country}px ${fontStack}`
+    ctx.fillText(lines.country.local, startX + localWidth / 2, y(fromBottom.country))
+    ctx.font = `400 ${countryLatinFontSize}px ${fontStack}`
+    ctx.fillText(
+      lines.country.latin,
+      startX + localWidth + gap + latinWidth / 2,
+      y(fromBottom.country),
+    )
+  } else {
+    ctx.font = `500 ${fonts.country}px ${fontStack}`
+    ctx.fillText(lines.country.local, widthPx / 2, y(fromBottom.country))
+  }
 
   ctx.font = `400 ${fonts.coordinates}px ${fontStack}`
   ctx.globalAlpha = 0.8
@@ -269,19 +301,22 @@ function typographySvg(
   fontFamily: string,
 ): string {
   const { widthPx, heightPx } = layout
-  const city = formatCityLabel(display.city)
-  const country = display.country
+  const lines = formatPosterDisplayLines(display)
   const coords = formatCoordinates(viewport.latitude, viewport.longitude)
-  const fontStack = `${fontFamily}, Roboto, system-ui, sans-serif`
+  const fontStack = posterFontStack(fontFamily, display.scriptFamily)
   const typography = posterTypographyLayout(widthPx, heightPx)
   const { fonts, lineWidth, fromBottom } = typography
 
   const y = (fromBottomFraction: number) => heightPx * (1 - fromBottomFraction)
+  const cityLatinSize = Math.max(fonts.country, Math.round(fonts.city * 0.45))
+  const countryLatinSize = Math.max(fonts.coordinates, Math.round(fonts.country * 0.65))
+  const cityGap = Math.max(8, Math.round(fonts.country * 0.3))
+  const countryGap = Math.max(6, Math.round(fonts.country * 0.25))
 
   return `
-    <text x="${widthPx / 2}" y="${y(fromBottom.city)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.city}" font-weight="700" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(city)}</text>
+    <text x="${widthPx / 2}" y="${y(fromBottom.city)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.city}" font-weight="700" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.city.local)}${lines.city.latin ? `<tspan dx="${cityGap}" font-size="${cityLatinSize}" font-weight="500">${escapeXml(lines.city.latin)}</tspan>` : ""}</text>
     <line x1="${widthPx * 0.35}" y1="${y(fromBottom.line)}" x2="${widthPx * 0.65}" y2="${y(fromBottom.line)}" stroke="${theme.text}" stroke-width="${lineWidth}" />
-    <text x="${widthPx / 2}" y="${y(fromBottom.country)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.country}" font-weight="500" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(country)}</text>
+    <text x="${widthPx / 2}" y="${y(fromBottom.country)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.country}" font-weight="500" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.country.local)}${lines.country.latin ? `<tspan dx="${countryGap}" font-size="${countryLatinSize}" font-weight="400">${escapeXml(lines.country.latin)}</tspan>` : ""}</text>
     <text x="${widthPx / 2}" y="${y(fromBottom.coordinates)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.coordinates}" font-weight="400" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(coords)}</text>
     <text x="${widthPx * (1 - POSTER_ATTRIBUTION_FROM_RIGHT)}" y="${y(fromBottom.attribution)}" fill="${theme.text}" fill-opacity="0.5" font-family="${escapeXml(fontStack)}" font-size="${fonts.attribution}" font-weight="400" text-anchor="end" dominant-baseline="alphabetic">${escapeXml(EXPORT_ATTRIBUTION)}</text>
   `

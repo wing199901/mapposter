@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { EXPORT_PRESETS, inchesToPixels } from "@/features/export/presets"
 import { posterTypographyLayout } from "@/features/tiles/posterTypographyLayout"
+import { formatPosterDisplayLines } from "@/lib/scriptDetection"
 
 function baselineGap(heightPx: number, higherFromBottom: number, lowerFromBottom: number): number {
   return (higherFromBottom - lowerFromBottom) * heightPx
@@ -38,5 +39,33 @@ describe("posterTypographyLayout export presets", () => {
     const layout = posterTypographyLayout(3840, 2160)
     expect(layout.fonts.city).toBeLessThan(150)
     expect(layout.fonts.city).toBeGreaterThan(100)
+  })
+
+  it("formats CJK display pairs as local large + latin small on each line without tracking", () => {
+    const lines = formatPosterDisplayLines({
+      city: "京都",
+      cityLatin: "Kyoto",
+      country: "日本",
+      countryLatin: "Japan",
+      scriptFamily: "jp",
+    })
+
+    expect(lines.isPairLayout).toBe(true)
+    expect(lines.city.local).toBe("京都")
+    expect(lines.city.latin).toBe("Kyoto")
+    expect(lines.city.applyLatinTracking).toBe(false)
+    expect(lines.country.local).toBe("日本")
+    expect(lines.country.latin).toBe("Japan")
+  })
+
+  it("keeps Latin-only city formatting unchanged", () => {
+    const lines = formatPosterDisplayLines({
+      city: "Hong Kong Island",
+      country: "Hong Kong",
+    })
+    expect(lines.isPairLayout).toBe(false)
+    expect(lines.city.local).toBe("H O N G\u2003K O N G\u2003I S L A N D")
+    expect(lines.city.latin).toBeUndefined()
+    expect(lines.city.applyLatinTracking).toBe(true)
   })
 })
