@@ -14,11 +14,36 @@ The center latitude/longitude plus radius in meters that defines which map area 
 
 ## Display labels
 
-User-facing city and country text shown on the poster. May differ from the geocode query (for example 東京 instead of Tokyo).
+User-facing text on the poster. For a CJK poster this is two **name pairs** (place line, then country line). For a Latin-only poster this remains city then country, each a single script. Never copied from the geocode query.
+
+## Local name
+
+The place or country name in the local CJK script, taken from OSM Nominatim `namedetails` (`name:zh-Hant`, `name:zh`, `name:ja`, `name:ko`). Source of truth after geocode. The user can override it by hand.
+
+## Latin name
+
+The same place or country in Latin script from `namedetails` (`name:en`) or another romanized OSM name. Not the search box string.
+
+## Name pair
+
+Local name (larger) and Latin name (smaller) on the same line, local first. Example: 京都 with KYOTO beside it, smaller.
+
+## Display pair layout
+
+When a local name exists, the poster has two lines:
+
+1. Place name pair
+2. Country name pair
+
+When Nominatim has no local CJK name, keep the existing Latin-only city / country layout. Do not invent a CJK country pair for a Latin-only city.
+
+## Script family
+
+Which CJK writing system the local name uses: Traditional Chinese (Hong Kong or Taiwan), Simplified Chinese, Japanese, or Korean. All four are in v1. Selects exactly one Noto family to lazy-load.
 
 ## Geocode query
 
-The city and country strings sent to Nominatim to resolve coordinates.
+The city and country strings sent to Nominatim to resolve coordinates. May be CJK or Latin. Used only to hit the correct OSM place, never as poster lettering.
 
 ## Geocode cache
 
