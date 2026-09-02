@@ -54,7 +54,6 @@ export function buildGeocodeSearchAttempts(
     regionLower === "hong kong" || regionLower === "hk" || region === "香港"
 
   if (isHongKong) {
-    // Prefer HK-scoped queries first — e.g. "Hong Kong Island" vs the SAR "Hong Kong".
     add(`${place}, Hong Kong`, "hk")
     add(place, "hk")
     add(`${place}, China`, "hk")
@@ -151,7 +150,6 @@ export interface NominatimSearchResult {
   osmId?: number
 }
 
-/** Nominatim boundingbox: [south lat, north lat, west lon, east lon] */
 export function centerFromBoundingBox(
   boundingbox: [number, number, number, number],
 ): { latitude: number; longitude: number } {
@@ -162,7 +160,6 @@ export function centerFromBoundingBox(
   }
 }
 
-/** Nominatim boundingbox: [south lat, north lat, west lon, east lon] */
 export function suggestedRadiusFromBoundingBox(
   boundingbox: [number, number, number, number],
   centerLatitude: number,
@@ -171,7 +168,6 @@ export function suggestedRadiusFromBoundingBox(
   const halfLatMeters = (Math.abs(north - south) / 2) * 111_320
   const halfLonMeters =
     (Math.abs(east - west) / 2) * 111_320 * Math.cos((centerLatitude * Math.PI) / 180)
-  // Slight padding so the place fills the poster without clipping edges.
   const padded = Math.max(halfLatMeters, halfLonMeters) * 1.15
   const stepped = Math.round(padded / RADIUS_STEP_METERS) * RADIUS_STEP_METERS
   return Math.min(MAX_RADIUS_METERS, Math.max(MIN_RADIUS_METERS, stepped))
@@ -215,7 +211,13 @@ type NominatimResolvedNames = Pick<
   "placeLocalName" | "placeLatinName" | "countryLocalName" | "countryLatinName" | "countryCode"
 >
 
-const PLACE_LOCAL_KEYS = ["name:zh-Hant", "name:zh", "name:ja", "name:ko"] as const
+const PLACE_LOCAL_KEYS_DEFAULT = [
+  "name:zh-Hant",
+  "name:zh-Hans",
+  "name:zh",
+  "name:ja",
+  "name:ko",
+] as const
 const PLACE_LATIN_KEYS = ["name:en", "name:latin"] as const
 const LATIN_RANGE = /[\u0000-\u024F]/u
 
@@ -249,34 +251,45 @@ function fallbackNameFromDisplayName(displayName: string, index: number): string
   return parts[index]
 }
 
-function countryKeysForPlaceLocal(localKey: typeof PLACE_LOCAL_KEYS[number] | undefined): string[] {
-  switch (localKey) {
-    case "name:zh-Hant":
-      return ["country:zh-Hant", "country:zh"]
-    case "name:zh":
-      return ["country:zh", "country:zh-Hant"]
-    case "name:ja":
-      return ["country:ja"]
-    case "name:ko":
-      return ["country:ko"]
+function placeLocalKeysForCountryCode(countryCode: string | undefined): readonly string[] {
+  switch (countryCode?.toLowerCase()) {
+    case "jp":
+      return ["name:ja", "name:zh-Hant", "name:zh-Hans", "name:zh", "name:ko"]
+    case "kr":
+      return ["name:ko", "name:zh-Hant", "name:zh-Hans", "name:zh", "name:ja"]
+    case "hk":
+      return ["name:zh-Hant", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
+    case "tw":
+    case "mo":
+      return ["name:zh-Hant", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
+    case "cn":
+    case "sg":
+      return ["name:zh-Hans", "name:zh", "name:zh-Hant", "name:ja", "name:ko"]
     default:
-      return []
+      return PLACE_LOCAL_KEYS_DEFAULT
   }
 }
 
 export function parseNominatimNameDetails(
   hit: Pick<NominatimSearchHit, "display_name" | "namedetails" | "address">,
 ): NominatimResolvedNames {
-  const placeLocalKey = PLACE_LOCAL_KEYS.find((key) => hit.namedetails?.[key]?.trim())
-  const placeLocalName = placeLocalKey ? hit.namedetails?.[placeLocalKey]?.trim() : undefined
+  const countryCode = hit.address?.country_code?.trim() || undefined
+  const placeLocalName = pickFirstString(
+    hit.namedetails,
+    placeLocalKeysForCountryCode(countryCode),
+  )
   const placeLatinName =
     pickFirstString(hit.namedetails, PLACE_LATIN_KEYS) ??
     fallbackNameFromDisplayName(hit.display_name, 0) ??
     hit.display_name
 
+  const rawCountry = hit.address?.country?.trim()
+  const countryFromEn = pickFirstString(hit.address, ["country:en"])
+  const countryIsLatin = rawCountry ? isMostlyLatin(rawCountry) : false
+  const countryLocalName = rawCountry && !countryIsLatin ? rawCountry : undefined
   const countryLatinName =
-    pickFirstString(hit.address, ["country:en"]) ??
-    (hit.address?.country && isMostlyLatin(hit.address.country) ? hit.address.country.trim() : undefined) ??
+    countryFromEn ??
+    (rawCountry && countryIsLatin ? rawCountry : undefined) ??
     fallbackNameFromDisplayName(hit.display_name, 2) ??
     placeLatinName
 
@@ -286,20 +299,16 @@ export function parseNominatimNameDetails(
       placeLatinName,
       countryLocalName: undefined,
       countryLatinName,
-      countryCode: hit.address?.country_code?.trim(),
+      countryCode,
     }
   }
-
-  const countryLocalName =
-    pickFirstString(hit.address, countryKeysForPlaceLocal(placeLocalKey)) ??
-    (hit.address?.country?.trim() || undefined)
 
   return {
     placeLocalName,
     placeLatinName,
     countryLocalName,
     countryLatinName,
-    countryCode: hit.address?.country_code?.trim(),
+    countryCode,
   }
 }
 
