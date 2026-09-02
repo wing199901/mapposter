@@ -64,6 +64,8 @@ export interface DisplayLabels {
   cityLatin?: string
   countryLatin?: string
   scriptFamily?: ScriptFamily
+  /** True when OSM namedetails supplied a local CJK place name. */
+  hasPlaceLocalName?: boolean
 }
 
 export interface PosterConfig {

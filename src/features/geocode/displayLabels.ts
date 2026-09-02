@@ -21,14 +21,14 @@ export function displayLabelsFromGeocodeResult(result: GeocodeResult): DisplayLa
     }
   }
 
-  const countryLocal = result.countryLocalName ?? countryLatin
   return {
     city: result.placeLocalName,
     cityLatin: placeLatin,
-    country: countryLocal,
+    country: result.countryLocalName ?? "",
     countryLatin,
     scriptFamily: detectScriptFamily(result.placeLocalName, {
       countryCode: result.countryCode,
     }) ?? undefined,
+    hasPlaceLocalName: true,
   }
 }
