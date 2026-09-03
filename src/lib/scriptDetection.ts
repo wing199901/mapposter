@@ -90,7 +90,7 @@ export interface PosterDisplayLines {
 }
 
 export function formatPosterDisplayLines(display: DisplayLabels): PosterDisplayLines {
-  const isPairLayout = Boolean(display.hasPlaceLocalName ?? display.scriptFamily)
+  const isPairLayout = Boolean(display.hasPlaceLocalName)
   if (!isPairLayout) {
     return {
       isPairLayout: false,
@@ -106,17 +106,23 @@ export function formatPosterDisplayLines(display: DisplayLabels): PosterDisplayL
   }
 
   const countryLocal = display.country.trim() ? display.country : undefined
+  const cityLatin = display.cityLatin?.trim()
+    ? formatCityLabel(display.cityLatin)
+    : undefined
+  const countryLatin = display.countryLatin?.trim()
+    ? formatCityLabel(display.countryLatin)
+    : undefined
   return {
     isPairLayout: true,
     city: {
       local: display.city,
-      latin: display.cityLatin,
-      applyLatinTracking: false,
+      latin: cityLatin,
+      applyLatinTracking: Boolean(cityLatin),
     },
     country: {
       local: countryLocal,
-      latin: display.countryLatin,
-      applyLatinTracking: false,
+      latin: countryLatin,
+      applyLatinTracking: Boolean(countryLatin),
     },
   }
 }

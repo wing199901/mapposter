@@ -260,7 +260,9 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
           />
           <p
             className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-bold ${
-              displayLines.city.applyLatinTracking ? "tracking-wide" : ""
+              !displayLines.city.latin && displayLines.city.applyLatinTracking
+                ? "tracking-wide"
+                : ""
             }`}
             style={{
               bottom: `${fromBottom.city * 100}%`,
@@ -272,7 +274,9 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             {displayLines.city.local}
             {displayLines.city.latin ? (
               <span
-                className="ml-2 align-baseline font-medium"
+                className={`ml-2 align-baseline font-medium ${
+                  displayLines.city.applyLatinTracking ? "tracking-wide" : ""
+                }`}
                 style={{ fontSize: Math.max(fonts.country, Math.round(fonts.city * 0.45)) }}
               >
                 {displayLines.city.latin}
@@ -299,7 +303,9 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             {displayLines.country.local}
             {displayLines.country.latin ? (
               <span
-                className="ml-2 align-baseline font-normal"
+                className={`ml-2 align-baseline font-normal ${
+                  displayLines.country.applyLatinTracking ? "tracking-wide" : ""
+                }`}
                 style={{ fontSize: Math.max(fonts.coordinates, Math.round(fonts.country * 0.65)) }}
               >
                 {displayLines.country.latin}

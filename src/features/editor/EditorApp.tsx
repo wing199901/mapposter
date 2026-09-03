@@ -459,34 +459,100 @@ export function EditorApp() {
               <TabsContent value="labels">
                 <div className="flex flex-col gap-4">
                   <p className="text-xs text-muted-foreground">
-                    Poster text synced from Location when using place name. Edit here to override.
+                    Poster text synced from Location when using place name. Edit here to override
+                    strings only — bilingual pair layout stays tied to the last geocode.
                   </p>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="display-city">Display city</Label>
-                    <Input
-                      id="display-city"
-                      value={config.display.city}
-                      onChange={(event) =>
-                        setConfig((current) => ({
-                          ...current,
-                          display: { ...current.display, city: event.target.value },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="display-country">Display country</Label>
-                    <Input
-                      id="display-country"
-                      value={config.display.country}
-                      onChange={(event) =>
-                        setConfig((current) => ({
-                          ...current,
-                          display: { ...current.display, country: event.target.value },
-                        }))
-                      }
-                    />
-                  </div>
+                  {config.display.hasPlaceLocalName ? (
+                    <>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-city-local">Place local name</Label>
+                        <Input
+                          id="display-city-local"
+                          value={config.display.city}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              display: { ...current.display, city: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-city-latin">Place Latin name</Label>
+                        <Input
+                          id="display-city-latin"
+                          value={config.display.cityLatin ?? ""}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              display: {
+                                ...current.display,
+                                cityLatin: event.target.value || undefined,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-country-local">Country local name</Label>
+                        <Input
+                          id="display-country-local"
+                          value={config.display.country}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              display: { ...current.display, country: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-country-latin">Country Latin name</Label>
+                        <Input
+                          id="display-country-latin"
+                          value={config.display.countryLatin ?? ""}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              display: {
+                                ...current.display,
+                                countryLatin: event.target.value || undefined,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-city">Display city</Label>
+                        <Input
+                          id="display-city"
+                          value={config.display.city}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              display: { ...current.display, city: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-country">Display country</Label>
+                        <Input
+                          id="display-country"
+                          value={config.display.country}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              display: { ...current.display, country: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="font-family">Poster font</Label>
                     <Select

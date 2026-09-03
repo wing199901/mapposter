@@ -16,6 +16,7 @@ export interface SerializedPosterState {
   displayCityLatin?: string
   displayCountryLatin?: string
   displayScriptFamily?: PosterConfig["display"]["scriptFamily"]
+  displayHasPlaceLocalName?: boolean
   fontFamily: string
   centerLocked?: boolean
   widthInches: number
@@ -53,6 +54,7 @@ export function serializePosterState(config: PosterConfig): SerializedPosterStat
     displayCityLatin: config.display.cityLatin,
     displayCountryLatin: config.display.countryLatin,
     displayScriptFamily: config.display.scriptFamily,
+    displayHasPlaceLocalName: config.display.hasPlaceLocalName,
     fontFamily: config.fontFamily,
     centerLocked: config.centerLocked,
     widthInches: config.widthInches,
@@ -83,6 +85,7 @@ export function deserializePosterState(state: SerializedPosterState): PosterConf
       cityLatin: state.displayCityLatin,
       countryLatin: state.displayCountryLatin,
       scriptFamily: state.displayScriptFamily,
+      hasPlaceLocalName: state.displayHasPlaceLocalName,
     },
     fontFamily: state.fontFamily,
     centerLocked: state.centerLocked ?? false,

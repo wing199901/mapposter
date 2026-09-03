@@ -41,7 +41,7 @@ describe("posterTypographyLayout export presets", () => {
     expect(layout.fonts.city).toBeGreaterThan(100)
   })
 
-  it("formats CJK display pairs as local large + latin small on each line without tracking", () => {
+  it("formats CJK display pairs as local large + uppercase letter-spaced latin small", () => {
     const lines = formatPosterDisplayLines({
       city: "京都",
       cityLatin: "Kyoto",
@@ -53,10 +53,11 @@ describe("posterTypographyLayout export presets", () => {
 
     expect(lines.isPairLayout).toBe(true)
     expect(lines.city.local).toBe("京都")
-    expect(lines.city.latin).toBe("Kyoto")
-    expect(lines.city.applyLatinTracking).toBe(false)
+    expect(lines.city.latin).toBe("K Y O T O")
+    expect(lines.city.applyLatinTracking).toBe(true)
     expect(lines.country.local).toBe("日本")
-    expect(lines.country.latin).toBe("Japan")
+    expect(lines.country.latin).toBe("J A P A N")
+    expect(lines.country.applyLatinTracking).toBe(true)
   })
 
   it("keeps Latin-only city formatting unchanged", () => {
@@ -79,7 +80,10 @@ describe("posterTypographyLayout export presets", () => {
       scriptFamily: "jp",
     })
     expect(lines.isPairLayout).toBe(true)
-    expect(lines.city.applyLatinTracking).toBe(false)
+    expect(lines.city.latin).toBe("K Y O T O")
+    expect(lines.city.applyLatinTracking).toBe(true)
+    expect(lines.country.latin).toBeUndefined()
+    expect(lines.country.applyLatinTracking).toBe(false)
   })
 
   it("does not stuff latin country into local slot when local country is missing", () => {
@@ -93,6 +97,7 @@ describe("posterTypographyLayout export presets", () => {
     })
     expect(lines.isPairLayout).toBe(true)
     expect(lines.country.local).toBeUndefined()
-    expect(lines.country.latin).toBe("Japan")
+    expect(lines.country.latin).toBe("J A P A N")
+    expect(lines.country.applyLatinTracking).toBe(true)
   })
 })

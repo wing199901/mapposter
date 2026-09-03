@@ -68,12 +68,47 @@ describe("script detection", () => {
       placeLatinName: "Kyoto",
       countryLocalName: "日本",
       countryLatinName: "Japan",
+      countryCode: "jp",
     })
 
     expect(labels.city).toBe("京都")
     expect(labels.cityLatin).toBe("Kyoto")
     expect(labels.country).toBe("日本")
     expect(labels.countryLatin).toBe("Japan")
+    expect(labels.hasPlaceLocalName).toBe(true)
+    expect(labels.scriptFamily).toBe("jp")
+  })
+
+  it("discards a CJK geocode query that differs from namedetails in display and urlState", () => {
+    const queryCity = "京都市查錯"
+    const queryCountry = "日夲"
+    const labels = displayLabelsFromGeocodeResult({
+      latitude: 35.0116,
+      longitude: 135.7681,
+      displayName: "Kyoto, Japan",
+      placeLocalName: "京都",
+      placeLatinName: "Kyoto",
+      countryLocalName: "日本",
+      countryLatinName: "Japan",
+      countryCode: "jp",
+    })
+
+    const encoded = encodePosterState({
+      ...sampleConfig,
+      geocode: { city: queryCity, country: queryCountry },
+      display: labels,
+      fontFamily: "Noto Sans JP",
+    })
+    const decoded = decodePosterState(encoded)
+
+    expect(labels.city).not.toBe(queryCity)
+    expect(labels.country).not.toBe(queryCountry)
+    expect(decoded?.display.city).toBe("京都")
+    expect(decoded?.display.country).toBe("日本")
+    expect(decoded?.display.city).not.toBe(queryCity)
+    expect(decoded?.display.country).not.toBe(queryCountry)
+    expect(JSON.stringify(decoded?.display)).not.toContain(queryCity)
+    expect(JSON.stringify(decoded?.display)).not.toContain(queryCountry)
   })
 })
 
@@ -122,6 +157,28 @@ describe("url state", () => {
     const encoded = encodePosterState(sampleConfig)
     const decoded = decodePosterState(encoded)
     expect(decoded).toEqual(sampleConfig)
+  })
+
+  it("persists hasPlaceLocalName so pair layout survives share links after label edits", () => {
+    const cjkConfig: PosterConfig = {
+      ...sampleConfig,
+      geocode: { city: "Kyoto", country: "Japan" },
+      display: {
+        city: "京都",
+        cityLatin: "Kyoto",
+        country: "手動覆寫",
+        countryLatin: "Japan",
+        scriptFamily: "jp",
+        hasPlaceLocalName: true,
+      },
+      fontFamily: "Noto Sans JP",
+    }
+
+    const decoded = decodePosterState(encodePosterState(cjkConfig))
+    expect(decoded?.display.hasPlaceLocalName).toBe(true)
+    expect(decoded?.display.scriptFamily).toBe("jp")
+    expect(decoded?.display.cityLatin).toBe("Kyoto")
+    expect(decoded?.display.country).toBe("手動覆寫")
   })
 
   it("ignores deprecated mapShape on legacy share links", () => {
