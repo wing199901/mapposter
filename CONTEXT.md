@@ -22,11 +22,11 @@ The place or country name in the local CJK script, taken from OSM Nominatim `nam
 
 ## Latin name
 
-The same place or country in Latin script from `namedetails` (`name:en`) or another romanized OSM name. Not the search box string.
+The same place or country in Latin script from `namedetails` (`name:en`) or another romanized OSM name. Not the search box string. On the poster, Latin runs are uppercase with letter-spacing (including the small Latin side of a name pair).
 
 ## Name pair
 
-Local name (larger) and Latin name (smaller) on the same line, local first. Example: 京都 with KYOTO beside it, smaller.
+Local name (larger) and Latin name (smaller) on the same line, local first. Example: 京都 with K Y O T O beside it, smaller. CJK is never letter-spaced.
 
 ## Display pair layout
 
@@ -35,7 +35,7 @@ When a local name exists, the poster has two lines:
 1. Place name pair
 2. Country name pair
 
-When Nominatim has no local CJK name, keep the existing Latin-only city / country layout. Do not invent a CJK country pair for a Latin-only city.
+When Nominatim has no local CJK name, keep the existing Latin-only city / country layout. Do not invent a CJK country pair for a Latin-only city. Manual label edits change only the text strings; they do not flip pair layout or script family.
 
 ## Script family
 

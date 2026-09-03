@@ -54,7 +54,6 @@ export function buildGeocodeSearchAttempts(
     regionLower === "hong kong" || regionLower === "hk" || region === "香港"
 
   if (isHongKong) {
-    // Prefer HK-scoped queries first — e.g. "Hong Kong Island" vs the SAR "Hong Kong".
     add(`${place}, Hong Kong`, "hk")
     add(place, "hk")
     add(`${place}, China`, "hk")
@@ -76,6 +75,8 @@ export function buildNominatimSearchUrl(
     q: attempt.q,
     format: "json",
     limit: "1",
+    namedetails: "1",
+    addressdetails: "1",
     email: contactEmail,
   })
 
@@ -139,12 +140,16 @@ export interface NominatimSearchResult {
   latitude: number
   longitude: number
   displayName: string
+  placeLocalName?: string
+  placeLatinName: string
+  countryLocalName?: string
+  countryLatinName: string
+  countryCode?: string
   suggestedRadiusMeters: number
   osmType?: NominatimOsmType
   osmId?: number
 }
 
-/** Nominatim boundingbox: [south lat, north lat, west lon, east lon] */
 export function centerFromBoundingBox(
   boundingbox: [number, number, number, number],
 ): { latitude: number; longitude: number } {
@@ -155,7 +160,6 @@ export function centerFromBoundingBox(
   }
 }
 
-/** Nominatim boundingbox: [south lat, north lat, west lon, east lon] */
 export function suggestedRadiusFromBoundingBox(
   boundingbox: [number, number, number, number],
   centerLatitude: number,
@@ -164,7 +168,6 @@ export function suggestedRadiusFromBoundingBox(
   const halfLatMeters = (Math.abs(north - south) / 2) * 111_320
   const halfLonMeters =
     (Math.abs(east - west) / 2) * 111_320 * Math.cos((centerLatitude * Math.PI) / 180)
-  // Slight padding so the place fills the poster without clipping edges.
   const padded = Math.max(halfLatMeters, halfLonMeters) * 1.15
   const stepped = Math.round(padded / RADIUS_STEP_METERS) * RADIUS_STEP_METERS
   return Math.min(MAX_RADIUS_METERS, Math.max(MIN_RADIUS_METERS, stepped))
@@ -196,9 +199,117 @@ type NominatimSearchHit = {
   lat: string
   lon: string
   display_name: string
+  namedetails?: Record<string, string>
+  address?: Record<string, string>
   boundingbox?: string[]
   osm_type?: string
   osm_id?: number
+}
+
+type NominatimResolvedNames = Pick<
+  NominatimSearchResult,
+  "placeLocalName" | "placeLatinName" | "countryLocalName" | "countryLatinName" | "countryCode"
+>
+
+const PLACE_LOCAL_KEYS_DEFAULT = [
+  "name:zh-Hant",
+  "name:zh-Hans",
+  "name:zh",
+  "name:ja",
+  "name:ko",
+] as const
+const PLACE_LATIN_KEYS = ["name:en", "name:latin"] as const
+const LATIN_RANGE = /[\u0000-\u024F]/u
+
+function pickFirstString(
+  source: Record<string, string> | undefined,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = source?.[key]?.trim()
+    if (value) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function isMostlyLatin(text: string): boolean {
+  const letters = [...text].filter((char) => /\p{L}/u.test(char))
+  if (letters.length === 0) {
+    return true
+  }
+  const latinCount = letters.filter((char) => LATIN_RANGE.test(char)).length
+  return latinCount / letters.length > 0.8
+}
+
+function fallbackNameFromDisplayName(displayName: string, index: number): string | undefined {
+  const parts = displayName
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+  return parts[index]
+}
+
+function placeLocalKeysForCountryCode(countryCode: string | undefined): readonly string[] {
+  switch (countryCode?.toLowerCase()) {
+    case "jp":
+      return ["name:ja", "name:zh-Hant", "name:zh-Hans", "name:zh", "name:ko"]
+    case "kr":
+      return ["name:ko", "name:zh-Hant", "name:zh-Hans", "name:zh", "name:ja"]
+    case "hk":
+      return ["name:zh-Hant", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
+    case "tw":
+    case "mo":
+      return ["name:zh-Hant", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
+    case "cn":
+    case "sg":
+      return ["name:zh-Hans", "name:zh", "name:zh-Hant", "name:ja", "name:ko"]
+    default:
+      return PLACE_LOCAL_KEYS_DEFAULT
+  }
+}
+
+export function parseNominatimNameDetails(
+  hit: Pick<NominatimSearchHit, "display_name" | "namedetails" | "address">,
+): NominatimResolvedNames {
+  const countryCode = hit.address?.country_code?.trim() || undefined
+  const placeLocalName = pickFirstString(
+    hit.namedetails,
+    placeLocalKeysForCountryCode(countryCode),
+  )
+  const placeLatinName =
+    pickFirstString(hit.namedetails, PLACE_LATIN_KEYS) ??
+    fallbackNameFromDisplayName(hit.display_name, 0) ??
+    hit.display_name
+
+  const rawCountry = hit.address?.country?.trim()
+  const countryFromEn = pickFirstString(hit.address, ["country:en"])
+  const countryIsLatin = rawCountry ? isMostlyLatin(rawCountry) : false
+  const countryLocalName = rawCountry && !countryIsLatin ? rawCountry : undefined
+  const countryLatinName =
+    countryFromEn ??
+    (rawCountry && countryIsLatin ? rawCountry : undefined) ??
+    fallbackNameFromDisplayName(hit.display_name, 2) ??
+    placeLatinName
+
+  if (!placeLocalName) {
+    return {
+      placeLocalName: undefined,
+      placeLatinName,
+      countryLocalName: undefined,
+      countryLatinName,
+      countryCode,
+    }
+  }
+
+  return {
+    placeLocalName,
+    placeLatinName,
+    countryLocalName,
+    countryLatinName,
+    countryCode,
+  }
 }
 
 function parseNominatimSearchHit(hit: NominatimSearchHit | undefined): NominatimSearchResult | null {
@@ -217,11 +328,13 @@ function parseNominatimSearchHit(hit: NominatimSearchHit | undefined): Nominatim
     : 10000
   const osmType = parseOsmType(hit.osm_type)
   const osmId = typeof hit.osm_id === "number" ? hit.osm_id : undefined
+  const names = parseNominatimNameDetails(hit)
 
   return {
     latitude: center.latitude,
     longitude: center.longitude,
     displayName: hit.display_name,
+    ...names,
     suggestedRadiusMeters,
     ...(osmType && osmId != null ? { osmType, osmId } : {}),
   }

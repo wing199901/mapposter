@@ -13,6 +13,11 @@ export interface GeocodeBundle {
   latitude: number
   longitude: number
   displayName: string
+  placeLocalName?: string
+  placeLatinName?: string
+  countryLocalName?: string
+  countryLatinName?: string
+  countryCode?: string
   suggestedRadiusMeters?: number
   osmType?: "node" | "way" | "relation"
   osmId?: number
