@@ -75,7 +75,7 @@ export interface PosterConfig {
   customTheme?: PosterTheme
   display: DisplayLabels
   fontFamily: string
-  /** When true, place-name lookup will not overwrite lat/lon. */
+  /** When true, place-name lookup will not overwrite lat/lon or radiusMeters. */
   centerLocked: boolean
   widthInches: number
   heightInches: number

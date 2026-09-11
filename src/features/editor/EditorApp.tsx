@@ -22,6 +22,10 @@ import { ExportPopover } from "@/features/editor/ExportPopover"
 import { LayerTogglesSection } from "@/features/editor/LayerTogglesSection"
 import { isKnownPosterFont, POSTER_FONT_OPTIONS } from "@/features/editor/fontOptions"
 import {
+  shouldSkipAutomaticPlaceLookup,
+  viewportFromPlaceLookup,
+} from "@/features/editor/placeLookup"
+import {
   isExportBusy,
   resolveProgressPercent,
 } from "@/features/editor/generationProgress"
@@ -35,7 +39,7 @@ import type { MapPosterHandle } from "@/features/tiles/mapPosterRef"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
 import { ensureNotoFamilyLoaded, notoFamilyForScript } from "@/lib/notoFonts"
 import type { PosterTheme } from "@/lib/types"
-import { encodePosterState } from "@/lib/urlState"
+import { encodePosterState, readStateFromLocation } from "@/lib/urlState"
 import {
   MAX_RADIUS_METERS,
   MIN_RADIUS_METERS,
@@ -81,6 +85,12 @@ export function EditorApp() {
   const themes = useMemo(() => listThemes(), [])
   const isBusy = isExportBusy(progress)
   const progressPercent = resolveProgressPercent(progress)
+  const hydratedFromShareHashRef = useRef(readStateFromLocation() != null)
+  const initialPlaceRef = useRef({
+    city: config.geocode.city,
+    country: config.geocode.country,
+  })
+  const initialCenterLockedRef = useRef(config.centerLocked)
 
   const handleViewportChange = useCallback(
     (patch: Partial<typeof config.viewport>) => {
@@ -139,6 +149,21 @@ export function EditorApp() {
       }
     }
 
+    const placeEditedByUser =
+      placeCity !== initialPlaceRef.current.city ||
+      placeCountry !== initialPlaceRef.current.country
+    if (
+      shouldSkipAutomaticPlaceLookup({
+        hydratedFromShareHash: hydratedFromShareHashRef.current,
+        centerLocked: initialCenterLockedRef.current,
+        placeEditedByUser,
+      })
+    ) {
+      return () => {
+        window.clearTimeout(syncTimer)
+      }
+    }
+
     let cancelled = false
     const lookupTimer = window.setTimeout(() => {
       void (async () => {
@@ -162,16 +187,7 @@ export function EditorApp() {
                 : current.fontFamily,
             placeOsmType: result.osmType,
             placeOsmId: result.osmId,
-            viewport: {
-              ...current.viewport,
-              ...(current.centerLocked
-                ? {}
-                : {
-                    latitude: result.latitude,
-                    longitude: result.longitude,
-                  }),
-              radiusMeters: suggested ?? current.viewport.radiusMeters,
-            },
+            viewport: viewportFromPlaceLookup(current, result),
           }))
           setPlaceLookupMessage(
             suggested != null

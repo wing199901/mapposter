@@ -14,7 +14,7 @@ export function notoFamilyForScript(scriptFamily: ScriptFamily): string {
   return NOTO_BY_SCRIPT[scriptFamily]
 }
 
-function unloadOtherNotoFamilies(keep: ScriptFamily): void {
+function unloadNotoFamilies(keep?: ScriptFamily): void {
   if (typeof document === "undefined") {
     return
   }
@@ -23,19 +23,30 @@ function unloadOtherNotoFamilies(keep: ScriptFamily): void {
     document.head.querySelectorAll<HTMLLinkElement>("link[data-noto-script-family]"),
   )) {
     const family = link.dataset.notoScriptFamily as ScriptFamily | undefined
-    if (family && family !== keep) {
+    if (!keep || family !== keep) {
       link.remove()
-      loadedScripts.delete(family)
+      if (family) {
+        loadedScripts.delete(family)
+      }
     }
+  }
+
+  if (!keep) {
+    loadedScripts.clear()
   }
 }
 
 export function ensureNotoFamilyLoaded(scriptFamily: ScriptFamily | undefined): void {
-  if (!scriptFamily || typeof document === "undefined") {
+  if (typeof document === "undefined") {
     return
   }
 
-  unloadOtherNotoFamilies(scriptFamily)
+  if (!scriptFamily) {
+    unloadNotoFamilies()
+    return
+  }
+
+  unloadNotoFamilies(scriptFamily)
 
   if (loadedScripts.has(scriptFamily)) {
     return
