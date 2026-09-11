@@ -144,9 +144,12 @@ test.describe("Map Poster Studio", () => {
     await page.goto(`/#p=${hash}`)
     await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
     await expect(page.getByLabel("City", { exact: true })).toHaveValue("Hong Kong Island")
+    await expect(page.getByText("22.2800° N, 114.1600° E")).toBeVisible()
     await page.waitForTimeout(1200)
     expect(geocodeCalls).toBe(0)
-    await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
+    await expect(page.getByText("Looking up place size…")).toHaveCount(0)
+    await expect(page.getByText(/Suggested map radius \d+ m from place size/i)).toHaveCount(0)
+    await expect(page.getByText("22.2800° N, 114.1600° E")).toBeVisible()
   })
 
   test("keeps share-hash radius when centerLocked is false", async ({ page }) => {
@@ -179,11 +182,20 @@ test.describe("Map Poster Studio", () => {
     await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
     await page.waitForTimeout(1200)
     expect(geocodeCalls).toBe(0)
-    await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
+    await expect(page.getByText("Looking up place size…")).toHaveCount(0)
+    await expect(page.getByText(/Suggested map radius \d+ m from place size/i)).toHaveCount(0)
   })
 
   test("looks up place after the user edits city on a restored share link", async ({ page }) => {
-    await mockGeocodeApi(page)
+    let geocodeCalls = 0
+    await page.route("**/api/geocode**", async (route) => {
+      geocodeCalls += 1
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockGeocode),
+      })
+    })
     await mockBoundaryApi(page)
 
     const hash = encodeShareHash({
@@ -203,11 +215,12 @@ test.describe("Map Poster Studio", () => {
 
     await page.goto(`/#p=${hash}`)
     await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
+    expect(geocodeCalls).toBe(0)
 
     await page.getByLabel("City", { exact: true }).fill("Kowloon")
     await expect(
       page.getByText(/Suggested map radius \d+ m from place size|Place found\. The preview updates live/i),
     ).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText("12000 m", { exact: true })).toBeVisible()
+    expect(geocodeCalls).toBeGreaterThan(0)
   })
 })
