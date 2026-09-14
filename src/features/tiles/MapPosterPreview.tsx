@@ -331,7 +331,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             style={{ background: posterBottomVignetteCss(fadeBottomStart) }}
           />
           <p
-            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 ${
+            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap ${
               !displayLines.city.latin && displayLines.city.applyLatinTracking
                 ? "tracking-wide"
                 : ""
@@ -347,7 +347,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             {displayLines.city.local}
             {displayLines.city.latin ? (
               <span
-                className="align-baseline"
+                className="align-baseline whitespace-nowrap"
                 style={{
                   fontSize: cityFontSize,
                   fontWeight: cityLatinWeight,
@@ -367,7 +367,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             }}
           />
           <p
-            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2"
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap"
             style={{
               bottom: `${fromBottom.country * 100}%`,
               color: theme.text,
@@ -379,7 +379,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             {displayLines.country.local}
             {displayLines.country.latin ? (
               <span
-                className="align-baseline"
+                className="align-baseline whitespace-nowrap"
                 style={{
                   fontSize: countryFontSize,
                   fontWeight: countryLatinWeight,
