@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Poster lettering today is two independent fields, `display.city` and `display.country`, usually filled from the geocode query or from Nominatim's English-leaning `display_name`. The CJK wedge is: a Kyoto search should letter 京都 large and KYOTO small, with 日本 / JAPAN on the second line. Copying the search box onto the poster would treat typos and script choice as the label. `accept-language` alone would change names by browser locale, not by the place.
+Poster lettering today is two independent fields, `display.city` and `display.country`, usually filled from the geocode query or from Nominatim's English-leaning `display_name`. The CJK wedge is: a Kyoto search should letter 京都 and KYOTO on one line at the same size (Latin lighter weight), with 日本 / JAPAN on the second line the same way. Copying the search box onto the poster would treat typos and script choice as the label. `accept-language` alone would change names by browser locale, not by the place.
 
 ## Decision
 

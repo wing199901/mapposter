@@ -41,7 +41,7 @@ describe("posterTypographyLayout export presets", () => {
     expect(layout.fonts.city).toBeGreaterThan(100)
   })
 
-  it("formats CJK display pairs as local large + uppercase letter-spaced latin small", () => {
+  it("formats CJK display pairs as local + uppercase letter-spaced latin", () => {
     const lines = formatPosterDisplayLines({
       city: "京都",
       cityLatin: "Kyoto",

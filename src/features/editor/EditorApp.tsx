@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Separator, Textarea } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
+import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ExportPopover } from "@/features/editor/ExportPopover"
 import { LayerTogglesSection } from "@/features/editor/LayerTogglesSection"
@@ -36,6 +37,10 @@ import { displayLabelsFromGeocodeResult } from "@/features/geocode/displayLabels
 import { usePlaceBoundary } from "@/features/boundary/usePlaceBoundary"
 import { MapPosterPreview } from "@/features/tiles/MapPosterPreview"
 import type { MapPosterHandle } from "@/features/tiles/mapPosterRef"
+import {
+  INITIAL_MAP_PREVIEW_STATUS,
+  type MapPreviewStatus,
+} from "@/features/tiles/mapPreviewStatus"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
 import { ensureNotoFamilyLoaded, notoFamilyForScript } from "@/lib/notoFonts"
 import type { PosterTheme } from "@/lib/types"
@@ -82,6 +87,7 @@ export function EditorApp() {
   const [placeCountry, setPlaceCountry] = useState(config.geocode.country)
   const [placeLookupMessage, setPlaceLookupMessage] = useState<string | null>(null)
   const [isPlaceLookingUp, setIsPlaceLookingUp] = useState(false)
+  const [mapStatus, setMapStatus] = useState<MapPreviewStatus>(INITIAL_MAP_PREVIEW_STATUS)
   const themes = useMemo(() => listThemes(), [])
   const isBusy = isExportBusy(progress)
   const progressPercent = resolveProgressPercent(progress)
@@ -238,23 +244,22 @@ export function EditorApp() {
             </p>
           </div>
           <div className="flex min-w-0 flex-1 flex-col items-end gap-2 sm:max-w-sm">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{progress.message}</Badge>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  navigator.clipboard.writeText(shareLink)
-                  toast.success("Share link copied")
-                }}
-              >
-                <Share2 data-icon="inline-start" />
-                Share
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                navigator.clipboard.writeText(shareLink)
+                toast.success("Share link copied")
+              }}
+            >
+              <Share2 data-icon="inline-start" />
+              Share
+            </Button>
             {isBusy ? (
               <div className="w-full space-y-1">
                 <Progress value={progressPercent} />
-                <p className="text-right text-xs text-muted-foreground">{progressPercent}%</p>
+                <p className="text-right text-xs text-muted-foreground">
+                  {progress.message} · {progressPercent}%
+                </p>
               </div>
             ) : null}
           </div>
@@ -308,9 +313,6 @@ export function EditorApp() {
                     onChange={(event) => setPlaceCountry(event.target.value)}
                   />
                 </div>
-                {placeLookupMessage ? (
-                  <p className="text-xs text-muted-foreground">{placeLookupMessage}</p>
-                ) : null}
               </TabsContent>
 
               <TabsContent value="coordinates" className="flex flex-col gap-4">
@@ -359,6 +361,37 @@ export function EditorApp() {
                 </div>
               </TabsContent>
             </Tabs>
+
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Preview status
+              </p>
+              <div className="mt-2 flex flex-col gap-3">
+                <div className="flex items-start gap-2">
+                  {isPlaceLookingUp || mapStatus.phase !== "ready" ? (
+                    <Spinner className="mt-0.5 size-4 shrink-0" />
+                  ) : null}
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <p className="text-sm">
+                      {isPlaceLookingUp ? "Looking up place…" : mapStatus.message}
+                    </p>
+                    {!isPlaceLookingUp && mapStatus.phase === "loading-tiles" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Tile source: {mapStatus.tileSource}
+                      </p>
+                    ) : null}
+                    {!isPlaceLookingUp && mapStatus.phase === "ready" ? (
+                      <p className="text-xs text-muted-foreground">
+                        Tiles from OpenFreeMap are loaded for the current view.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                {locationMode === "search" && placeLookupMessage && !isPlaceLookingUp ? (
+                  <p className="text-xs text-muted-foreground">{placeLookupMessage}</p>
+                ) : null}
+              </div>
+            </div>
 
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
@@ -630,11 +663,14 @@ export function EditorApp() {
                   theme={theme}
                   boundaryGeometry={boundaryGeometry}
                   onViewportChange={handleViewportChange}
-                  onReadyChange={setMapReady}
+                  onStatusChange={(status) => {
+                    setMapStatus(status)
+                    setMapReady(status.ready)
+                  }}
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Drag to pan and scroll to zoom. Export when the map finishes loading.
+                Drag to pan and scroll to zoom. Export when preview status shows all tiles loaded.
               </p>
             </div>
           </CardContent>

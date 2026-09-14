@@ -18,7 +18,7 @@ Lazy-load exactly one Noto family per poster, from the **script family** of the 
 - Japanese: Noto Sans JP
 - Korean: Noto Sans KR
 
-Keep Latin letter-spacing for Latin runs, including the small Latin side of a bilingual name pair. Never track CJK. Latin-only posters keep the existing font list and do not load Noto CJK. When the script family changes mid-session — including switching to Latin-only (`scriptFamily` unset) — unload the previous regional stylesheet so at most one CJK family stays linked.
+Keep Latin letter-spacing for Latin runs, including the Latin side of a bilingual name pair (same font size as the local name, lighter weight). Never track CJK. Latin-only posters keep the existing font list and do not load Noto CJK. When the script family changes mid-session — including switching to Latin-only (`scriptFamily` unset) — unload the previous regional stylesheet so at most one CJK family stays linked.
 
 ## Consequences
 

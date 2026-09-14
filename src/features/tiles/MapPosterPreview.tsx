@@ -2,6 +2,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -17,6 +18,11 @@ import type { PosterConfig, PosterTheme } from "@/lib/types"
 import { EXPORT_ATTRIBUTION } from "./constants"
 import type { MapPosterHandle } from "./mapPosterRef"
 import {
+  createMapPreviewStatusPublisher,
+  type MapPreviewStatus,
+} from "./mapPreviewStatus"
+import { fitPairLineTypographyForPoster } from "./pairLineTypography"
+import {
   POSTER_ATTRIBUTION_FROM_RIGHT,
   posterTypographyLayout,
 } from "./posterTypographyLayout"
@@ -31,21 +37,31 @@ interface MapPosterPreviewProps {
   theme: PosterTheme
   boundaryGeometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
   onViewportChange: (patch: Partial<PosterConfig["viewport"]>) => void
-  onReadyChange: (ready: boolean) => void
+  onStatusChange: (status: MapPreviewStatus) => void
 }
 
 export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProps>(
   function MapPosterPreview(
-    { config, theme, boundaryGeometry, onViewportChange, onReadyChange },
+    { config, theme, boundaryGeometry, onViewportChange, onStatusChange },
     ref,
   ) {
     const slotRef = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const mapRef = useRef<maplibregl.Map | null>(null)
     const skipMoveEndRef = useRef(false)
+    const onStatusChangeRef = useRef(onStatusChange)
+    const onViewportChangeRef = useRef(onViewportChange)
+    const publishStatusRef = useRef(
+      createMapPreviewStatusPublisher((status) => {
+        onStatusChangeRef.current(status)
+      }),
+    )
     const [mapLoaded, setMapLoaded] = useState(false)
     const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null)
     const [displaySize, setDisplaySize] = useState({ widthPx: 360, heightPx: 480 })
+
+    onStatusChangeRef.current = onStatusChange
+    onViewportChangeRef.current = onViewportChange
 
     useImperativeHandle(ref, () => ({
       getMap: () => mapRef.current,
@@ -86,6 +102,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
 
       let map: maplibregl.Map | null = null
       let resizeObserver: ResizeObserver | null = null
+      const publishStatus = publishStatusRef.current
 
       const initMap = () => {
         if (mapRef.current || !containerRef.current) {
@@ -111,16 +128,21 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
 
         mapRef.current = map
         setMapInstance(map)
-        onReadyChange(false)
+        publishStatus(map)
+
+        const refreshStatus = () => {
+          publishStatus(map)
+        }
 
         map.on("load", () => {
           setMapLoaded(true)
-          onReadyChange(true)
+          refreshStatus()
         })
 
-        map.on("idle", () => {
-          onReadyChange(true)
-        })
+        // Avoid MapLibre's chatty `data` event — it can re-render the app continuously.
+        map.on("idle", refreshStatus)
+        map.on("sourcedataloading", refreshStatus)
+        map.on("sourcedata", refreshStatus)
 
         map.on("error", (event) => {
           console.error("MapLibre error", event.error ?? event)
@@ -133,7 +155,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
           const centerPoint = map.getCenter()
           const zoomLevel = map.getZoom()
           const mapWidth = map.getContainer().clientWidth
-          onViewportChange({
+          onViewportChangeRef.current({
             latitude: centerPoint.lat,
             longitude: centerPoint.lng,
             radiusMeters: mapViewToRadiusMeters(centerPoint.lat, zoomLevel, mapWidth),
@@ -152,7 +174,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
 
       return () => {
         resizeObserver?.disconnect()
-        onReadyChange(false)
+        publishStatus(null)
         map?.remove()
         mapRef.current = null
         setMapInstance(null)
@@ -166,12 +188,13 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
       if (!map || !mapLoaded) {
         return
       }
-      onReadyChange(false)
+      publishStatusRef.current(map)
       map.setStyle(themeToMapStyle(theme, { layerVisibility: config.layerVisibility }))
       map.once("idle", () => {
-        onReadyChange(true)
+        publishStatusRef.current(map)
       })
-    }, [theme, config.layerVisibility, mapLoaded, onReadyChange])
+      // Do not depend on status callbacks — unstable parents previously re-ran setStyle in a loop.
+    }, [theme, config.layerVisibility, mapLoaded])
 
     useEffect(() => {
       const map = mapRef.current
@@ -214,6 +237,55 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
     const typography = posterTypographyLayout(displaySize.widthPx, displaySize.heightPx)
     const { fonts, fromBottom, fadeBottomStart } = typography
     const fontStack = posterFontStack(config.fontFamily, config.display.scriptFamily)
+
+    const pairFits = useMemo(() => {
+      if (typeof document === "undefined") {
+        return { city: null, country: null }
+      }
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        return { city: null, country: null }
+      }
+      return {
+        city: fitPairLineTypographyForPoster({
+          role: "city",
+          baseFontSize: fonts.city,
+          local: displayLines.city.local,
+          latin: displayLines.city.latin,
+          posterWidthPx: displaySize.widthPx,
+          fontStack,
+          ctx,
+        }),
+        country: fitPairLineTypographyForPoster({
+          role: "country",
+          baseFontSize: fonts.country,
+          local: displayLines.country.local,
+          latin: displayLines.country.latin,
+          posterWidthPx: displaySize.widthPx,
+          fontStack,
+          ctx,
+        }),
+      }
+    }, [
+      displayLines.city.local,
+      displayLines.city.latin,
+      displayLines.country.local,
+      displayLines.country.latin,
+      displaySize.widthPx,
+      fonts.city,
+      fonts.country,
+      fontStack,
+    ])
+
+    const cityFontSize = pairFits.city?.fontSize ?? fonts.city
+    const countryFontSize = pairFits.country?.fontSize ?? fonts.country
+    const cityLocalWeight = pairFits.city?.localWeight ?? 700
+    const cityLatinWeight = pairFits.city?.latinWeight ?? 500
+    const countryLocalWeight = pairFits.country?.localWeight ?? 500
+    const countryLatinWeight = pairFits.country?.latinWeight ?? 400
+    const cityGap = pairFits.city?.gapPx ?? Math.max(8, Math.round(fonts.city * 0.2))
+    const countryGap = pairFits.country?.gapPx ?? Math.max(6, Math.round(fonts.country * 0.18))
 
     const overlayStyle = {
       "--poster-text": theme.text,
@@ -259,7 +331,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             style={{ background: posterBottomVignetteCss(fadeBottomStart) }}
           />
           <p
-            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-bold ${
+            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 ${
               !displayLines.city.latin && displayLines.city.applyLatinTracking
                 ? "tracking-wide"
                 : ""
@@ -267,17 +339,20 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             style={{
               bottom: `${fromBottom.city * 100}%`,
               color: theme.text,
-              fontSize: fonts.city,
+              fontSize: cityFontSize,
               fontFamily: fontStack,
+              fontWeight: cityLocalWeight,
             }}
           >
             {displayLines.city.local}
             {displayLines.city.latin ? (
               <span
-                className={`ml-2 align-baseline font-medium ${
-                  displayLines.city.applyLatinTracking ? "tracking-wide" : ""
-                }`}
-                style={{ fontSize: Math.max(fonts.country, Math.round(fonts.city * 0.45)) }}
+                className="align-baseline"
+                style={{
+                  fontSize: cityFontSize,
+                  fontWeight: cityLatinWeight,
+                  marginLeft: cityGap,
+                }}
               >
                 {displayLines.city.latin}
               </span>
@@ -292,21 +367,24 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             }}
           />
           <p
-            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 font-medium"
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2"
             style={{
               bottom: `${fromBottom.country * 100}%`,
               color: theme.text,
-              fontSize: fonts.country,
+              fontSize: countryFontSize,
               fontFamily: fontStack,
+              fontWeight: countryLocalWeight,
             }}
           >
             {displayLines.country.local}
             {displayLines.country.latin ? (
               <span
-                className={`ml-2 align-baseline font-normal ${
-                  displayLines.country.applyLatinTracking ? "tracking-wide" : ""
-                }`}
-                style={{ fontSize: Math.max(fonts.coordinates, Math.round(fonts.country * 0.65)) }}
+                className="align-baseline"
+                style={{
+                  fontSize: countryFontSize,
+                  fontWeight: countryLatinWeight,
+                  marginLeft: countryGap,
+                }}
               >
                 {displayLines.country.latin}
               </span>
