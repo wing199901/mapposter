@@ -64,6 +64,33 @@ describe("nominatim request helpers", () => {
     expect(parsed.placeLocalName).toBe("广州")
   })
 
+  it("treats ISO3166-2-lvl3 CN-HK as Hong Kong Traditional, not mainland Simplified", () => {
+    const parsed = parseNominatimNameDetails({
+      display_name: "香港島 Hong Kong Island, 香港 Hong Kong, 中国",
+      namedetails: {
+        "name:zh-Hans": "香港岛",
+        "name:zh-Hant": "香港島",
+        "name:zh": "香港島",
+        "name:yue": "香港島",
+        "name:en": "Hong Kong Island",
+      },
+      address: {
+        city: "香港 Hong Kong",
+        region: "香港 Hong Kong",
+        "ISO3166-2-lvl3": "CN-HK",
+        country: "中国",
+        country_code: "cn",
+      },
+    })
+    expect(parsed).toEqual({
+      placeLocalName: "香港島",
+      placeLatinName: "Hong Kong Island",
+      countryLocalName: "香港",
+      countryLatinName: "Hong Kong",
+      countryCode: "hk",
+    })
+  })
+
   it("does not invent country local when only latin country is available", () => {
     const parsed = parseNominatimNameDetails({
       display_name: "Kyoto, Kyoto, Japan",

@@ -258,7 +258,7 @@ function placeLocalKeysForCountryCode(countryCode: string | undefined): readonly
     case "kr":
       return ["name:ko", "name:zh-Hant", "name:zh-Hans", "name:zh", "name:ja"]
     case "hk":
-      return ["name:zh-Hant", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
+      return ["name:zh-Hant", "name:yue", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
     case "tw":
     case "mo":
       return ["name:zh-Hant", "name:zh", "name:zh-Hans", "name:ja", "name:ko"]
@@ -270,10 +270,21 @@ function placeLocalKeysForCountryCode(countryCode: string | undefined): readonly
   }
 }
 
+/** Nominatim often tags HK places as country_code=cn; ISO3166-2-lvl3 CN-HK is the reliable signal. */
+function resolveEffectiveCountryCode(
+  address: Record<string, string> | undefined,
+): string | undefined {
+  const isoSubdivision = address?.["ISO3166-2-lvl3"]?.trim().toUpperCase()
+  if (isoSubdivision === "CN-HK") {
+    return "hk"
+  }
+  return address?.country_code?.trim() || undefined
+}
+
 export function parseNominatimNameDetails(
   hit: Pick<NominatimSearchHit, "display_name" | "namedetails" | "address">,
 ): NominatimResolvedNames {
-  const countryCode = hit.address?.country_code?.trim() || undefined
+  const countryCode = resolveEffectiveCountryCode(hit.address)
   const placeLocalName = pickFirstString(
     hit.namedetails,
     placeLocalKeysForCountryCode(countryCode),
@@ -282,6 +293,25 @@ export function parseNominatimNameDetails(
     pickFirstString(hit.namedetails, PLACE_LATIN_KEYS) ??
     fallbackNameFromDisplayName(hit.display_name, 0) ??
     hit.display_name
+
+  if (countryCode === "hk") {
+    if (!placeLocalName) {
+      return {
+        placeLocalName: undefined,
+        placeLatinName,
+        countryLocalName: undefined,
+        countryLatinName: "Hong Kong",
+        countryCode,
+      }
+    }
+    return {
+      placeLocalName,
+      placeLatinName,
+      countryLocalName: "香港",
+      countryLatinName: "Hong Kong",
+      countryCode,
+    }
+  }
 
   const rawCountry = hit.address?.country?.trim()
   const countryFromEn = pickFirstString(hit.address, ["country:en"])
