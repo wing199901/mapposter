@@ -35,7 +35,7 @@ When a local name exists, the poster has two lines:
 1. Place name pair
 2. Country name pair
 
-When Nominatim has no local CJK name, keep the existing Latin-only city / country layout. Do not invent a CJK country pair for a Latin-only city. Manual label edits change only the text strings; they do not flip pair layout or script family.
+A thin horizontal rule sits between those lines and matches the measured width of the place name pair (centered). When Nominatim has no local CJK name, keep the existing Latin-only city / country layout. Do not invent a CJK country pair for a Latin-only city. Manual label edits change only the text strings; they do not flip pair layout or script family.
 
 ## Script family
 

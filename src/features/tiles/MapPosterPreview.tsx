@@ -21,7 +21,7 @@ import {
   createMapPreviewStatusPublisher,
   type MapPreviewStatus,
 } from "./mapPreviewStatus"
-import { fitPairLineTypographyForPoster } from "./pairLineTypography"
+import { fitPairLineTypographyForPoster, placeRuleSpan } from "./pairLineTypography"
 import {
   POSTER_ATTRIBUTION_FROM_RIGHT,
   posterTypographyLayout,
@@ -286,6 +286,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
     const countryLatinWeight = pairFits.country?.latinWeight ?? 400
     const cityGap = pairFits.city?.gapPx ?? Math.max(8, Math.round(fonts.city * 0.2))
     const countryGap = pairFits.country?.gapPx ?? Math.max(6, Math.round(fonts.country * 0.18))
+    const placeRule = placeRuleSpan(displaySize.widthPx, pairFits.city?.widthPx)
 
     const overlayStyle = {
       "--poster-text": theme.text,
@@ -362,7 +363,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             className="pointer-events-none absolute left-1/2 z-10 h-px -translate-x-1/2 bg-current opacity-80"
             style={{
               bottom: `${fromBottom.line * 100}%`,
-              width: "33%",
+              width: placeRule.widthPx,
               color: theme.text,
             }}
           />

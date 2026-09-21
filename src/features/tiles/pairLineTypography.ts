@@ -15,8 +15,35 @@ export interface FittedPairLineTypography {
   localWeight: number
   latinWeight: number
   gapPx: number
+  /** Measured width of the fitted local (+ optional latin) line. */
+  widthPx: number
   local: string
   latin?: string
+}
+
+/** Fallback rule width when the place line cannot be measured (fraction of poster width). */
+export const PLACE_RULE_FALLBACK_WIDTH_RATIO = 0.33
+
+/**
+ * Horizontal span for the thought/break rule under the place line.
+ * Matches the place name width when known; otherwise uses a poster-relative fallback.
+ */
+export function placeRuleSpan(
+  posterWidthPx: number,
+  placeLineWidthPx: number | undefined,
+): { x1: number; x2: number; widthPx: number } {
+  const widthPx = Math.max(
+    1,
+    placeLineWidthPx && placeLineWidthPx > 0
+      ? placeLineWidthPx
+      : posterWidthPx * PLACE_RULE_FALLBACK_WIDTH_RATIO,
+  )
+  const centerX = posterWidthPx / 2
+  return {
+    widthPx,
+    x1: centerX - widthPx / 2,
+    x2: centerX + widthPx / 2,
+  }
 }
 
 export function pairLineWeights(role: PairLineRole): PairLineWeights {
@@ -76,6 +103,7 @@ export function fitPairLineTypography(options: {
     localWeight: weights.local,
     latinWeight: weights.latin,
     gapPx: fitted.gap,
+    widthPx: fitted.width,
     local,
     latin,
   }

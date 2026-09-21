@@ -4,6 +4,7 @@ import {
   PAIR_LINE_SAFE_WIDTH_RATIO,
   fitPairLineTypography,
   pairLineWeights,
+  placeRuleSpan,
 } from "@/features/tiles/pairLineTypography"
 
 describe("pairLineTypography", () => {
@@ -61,5 +62,34 @@ describe("pairLineTypography", () => {
 
   it("uses a 90% poster-width safe band by default", () => {
     expect(PAIR_LINE_SAFE_WIDTH_RATIO).toBe(0.9)
+  })
+
+  it("returns the measured width of the fitted pair line", () => {
+    const measure = (text: string, fontSize: number) => text.length * fontSize * 0.5
+    const fitted = fitPairLineTypography({
+      role: "city",
+      baseFontSize: 20,
+      local: "香港島",
+      latin: "ABC",
+      maxWidthPx: 2000,
+      measure,
+    })
+    expect(fitted.widthPx).toBe(
+      measure("香港島", 20) + fitted.gapPx + measure("ABC", 20),
+    )
+  })
+
+  it("centers a place rule that matches the place line width", () => {
+    const span = placeRuleSpan(1000, 400)
+    expect(span.widthPx).toBe(400)
+    expect(span.x1).toBe(300)
+    expect(span.x2).toBe(700)
+  })
+
+  it("falls back to a poster-relative rule when place width is unknown", () => {
+    const span = placeRuleSpan(1000, undefined)
+    expect(span.widthPx).toBe(330)
+    expect(span.x1).toBe(335)
+    expect(span.x2).toBe(665)
   })
 })

@@ -10,6 +10,7 @@ import { DPI } from "@/lib/types"
 import { EXPORT_ATTRIBUTION, MAP_BAND_HEIGHT_RATIO, POSTER_FADE_TOP_HEIGHT } from "@/features/tiles/constants"
 import {
   fitPairLineTypographyForPoster,
+  placeRuleSpan,
   type FittedPairLineTypography,
 } from "@/features/tiles/pairLineTypography"
 import {
@@ -154,7 +155,7 @@ function drawPosterTypography(
     line: { local?: string; latin?: string },
     baseFontSize: number,
     baselineY: number,
-  ) => {
+  ): FittedPairLineTypography => {
     const fitted = fitPairLineTypographyForPoster({
       role,
       baseFontSize,
@@ -165,16 +166,18 @@ function drawPosterTypography(
       ctx,
     })
     drawFittedPairLine(ctx, fitted, fontStack, widthPx / 2, baselineY)
+    return fitted
   }
 
-  drawPairOrSingle("city", lines.city, fonts.city, y(fromBottom.city))
+  const cityFit = drawPairOrSingle("city", lines.city, fonts.city, y(fromBottom.city))
+  const rule = placeRuleSpan(widthPx, cityFit.widthPx)
 
   ctx.strokeStyle = theme.text
   ctx.globalAlpha = 0.8
   ctx.lineWidth = lineWidth
   ctx.beginPath()
-  ctx.moveTo(widthPx * 0.35, y(fromBottom.line))
-  ctx.lineTo(widthPx * 0.65, y(fromBottom.line))
+  ctx.moveTo(rule.x1, y(fromBottom.line))
+  ctx.lineTo(rule.x2, y(fromBottom.line))
   ctx.stroke()
   ctx.globalAlpha = 1
 
@@ -357,10 +360,11 @@ function typographySvg(
   const countryLatinWeight = countryFit?.latinWeight ?? 400
   const cityGap = cityFit?.gapPx ?? Math.max(8, Math.round(fonts.city * 0.2))
   const countryGap = countryFit?.gapPx ?? Math.max(6, Math.round(fonts.country * 0.18))
+  const rule = placeRuleSpan(widthPx, cityFit?.widthPx)
 
   return `
     <text x="${widthPx / 2}" y="${y(fromBottom.city)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${citySize}" font-weight="${cityLocalWeight}" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.city.local ?? "")}${lines.city.latin ? `<tspan dx="${cityGap}" font-size="${citySize}" font-weight="${cityLatinWeight}">${escapeXml(lines.city.latin)}</tspan>` : ""}</text>
-    <line x1="${widthPx * 0.35}" y1="${y(fromBottom.line)}" x2="${widthPx * 0.65}" y2="${y(fromBottom.line)}" stroke="${theme.text}" stroke-width="${lineWidth}" />
+    <line x1="${rule.x1}" y1="${y(fromBottom.line)}" x2="${rule.x2}" y2="${y(fromBottom.line)}" stroke="${theme.text}" stroke-width="${lineWidth}" stroke-opacity="0.8" />
     <text x="${widthPx / 2}" y="${y(fromBottom.country)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${countrySize}" font-weight="${countryLocalWeight}" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lines.country.local ?? "")}${lines.country.latin ? `<tspan dx="${countryGap}" font-size="${countrySize}" font-weight="${countryLatinWeight}">${escapeXml(lines.country.latin)}</tspan>` : ""}</text>
     <text x="${widthPx / 2}" y="${y(fromBottom.coordinates)}" fill="${theme.text}" font-family="${escapeXml(fontStack)}" font-size="${fonts.coordinates}" font-weight="400" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(coords)}</text>
     <text x="${widthPx * (1 - POSTER_ATTRIBUTION_FROM_RIGHT)}" y="${y(fromBottom.attribution)}" fill="${theme.text}" fill-opacity="0.5" font-family="${escapeXml(fontStack)}" font-size="${fonts.attribution}" font-weight="400" text-anchor="end" dominant-baseline="alphabetic">${escapeXml(EXPORT_ATTRIBUTION)}</text>
