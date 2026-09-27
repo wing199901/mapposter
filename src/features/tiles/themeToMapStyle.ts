@@ -3,6 +3,8 @@ import type { StyleSpecification } from "maplibre-gl"
 import type { PosterLayerVisibility, PosterTheme } from "@/lib/types"
 import { DEFAULT_LAYER_VISIBILITY } from "@/lib/types"
 
+import { themeColorForLayer } from "./themePaint"
+
 import { OPENFREEMAP_GLYPHS, OPENFREEMAP_TILEJSON, WATER_SOURCE_MINZOOM } from "./constants"
 
 export interface PosterMapStyleOptions {
@@ -133,7 +135,7 @@ export function themeToMapStyle(
       source: "openmaptiles",
       "source-layer": "water",
       filter: WATER_LAYER_FILTER,
-      paint: { "fill-color": theme.water },
+      paint: { "fill-color": themeColorForLayer(theme, "water") },
     })
   }
 
@@ -145,7 +147,7 @@ export function themeToMapStyle(
         source: "openmaptiles",
         "source-layer": "park",
         filter: PARK_LAYER_FILTER,
-        paint: { "fill-color": theme.parks },
+        paint: { "fill-color": themeColorForLayer(theme, "parks") },
       },
       {
         id: "parks-landcover",
@@ -153,7 +155,7 @@ export function themeToMapStyle(
         source: "openmaptiles",
         "source-layer": "landcover",
         filter: PARK_LANDCOVER_FILTER,
-        paint: { "fill-color": theme.parks },
+        paint: { "fill-color": themeColorForLayer(theme, "parks") },
       },
     )
   }
@@ -164,7 +166,7 @@ export function themeToMapStyle(
       type: "fill",
       source: "openmaptiles",
       "source-layer": "building",
-      paint: { "fill-color": theme.buildings, "fill-opacity": 0.85 },
+      paint: { "fill-color": themeColorForLayer(theme, "buildings"), "fill-opacity": 0.85 },
     } satisfies FillLayer)
   }
 
@@ -176,7 +178,7 @@ export function themeToMapStyle(
       source: WATER_HIRES_SOURCE_ID,
       "source-layer": "water",
       filter: WATER_LAYER_FILTER,
-      paint: { "fill-color": theme.water },
+      paint: { "fill-color": themeColorForLayer(theme, "water-detail") },
     })
   }
 
@@ -188,7 +190,7 @@ export function themeToMapStyle(
       "source-layer": "waterway",
       filter: WATER_LAYER_FILTER,
       paint: {
-        "line-color": theme.water,
+        "line-color": themeColorForLayer(theme, "waterway"),
         "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 14, 1.5],
       },
     })
@@ -198,7 +200,7 @@ export function themeToMapStyle(
     layers.push(
       roadLayer(
         "road-residential",
-        theme.road_residential,
+        themeColorForLayer(theme, "road-residential"),
         ["match", ["get", "class"], ["minor", "service", "track", "path"], true, false],
         0.6,
       ),
@@ -206,14 +208,14 @@ export function themeToMapStyle(
   }
   if (v.roadTertiary) {
     layers.push(
-      roadLayer("road-tertiary", theme.road_tertiary, ["==", ["get", "class"], "tertiary"], 1),
+      roadLayer("road-tertiary", themeColorForLayer(theme, "road-tertiary"), ["==", ["get", "class"], "tertiary"], 1),
     )
   }
   if (v.roadSecondary) {
     layers.push(
       roadLayer(
         "road-secondary",
-        theme.road_secondary,
+        themeColorForLayer(theme, "road-secondary"),
         ["==", ["get", "class"], "secondary"],
         1.4,
       ),
@@ -223,7 +225,7 @@ export function themeToMapStyle(
     layers.push(
       roadLayer(
         "road-primary",
-        theme.road_primary,
+        themeColorForLayer(theme, "road-primary"),
         ["match", ["get", "class"], ["primary", "trunk"], true, false],
         2,
       ),
@@ -233,7 +235,7 @@ export function themeToMapStyle(
     layers.push(
       roadLayer(
         "road-motorway",
-        theme.road_motorway,
+        themeColorForLayer(theme, "road-motorway"),
         [
           "all",
           ["==", ["get", "class"], "motorway"],
@@ -250,27 +252,27 @@ export function themeToMapStyle(
     layers.push(
       roadLayer(
         "road-bridge-deck",
-        theme.road_motorway,
+        themeColorForLayer(theme, "road-bridge-deck"),
         ["==", ["get", "class"], "bridge"],
         2.4,
       ),
     )
   }
   if (v.roadDefault) {
-    layers.push(roadLayer("road-default", theme.road_default, ROAD_DEFAULT_FILTER, 0.8))
+    layers.push(roadLayer("road-default", themeColorForLayer(theme, "road-default"), ROAD_DEFAULT_FILTER, 0.8))
   }
   if (v.rail) {
     layers.push(
       roadLayer(
         "road-rail",
-        theme.road_default,
+        themeColorForLayer(theme, "road-rail"),
         ["match", ["get", "class"], ["rail", "transit"], true, false],
         1.2,
       ),
     )
   }
   if (v.shipRoutes) {
-    layers.push(roadLayer("road-ferry", theme.road_default, ["==", ["get", "class"], "ferry"], 1))
+    layers.push(roadLayer("road-ferry", themeColorForLayer(theme, "road-ferry"), ["==", ["get", "class"], "ferry"], 1))
   }
 
   return {

@@ -23,8 +23,10 @@ import { ExportPopover } from "@/features/editor/ExportPopover"
 import { LayerTogglesSection } from "@/features/editor/LayerTogglesSection"
 import { isKnownPosterFont, POSTER_FONT_OPTIONS } from "@/features/editor/fontOptions"
 import {
+  applyGeocodeToPoster,
+  placeLookupFailureMessage,
+  placeLookupSuccessMessage,
   shouldSkipAutomaticPlaceLookup,
-  viewportFromPlaceLookup,
 } from "@/features/editor/placeLookup"
 import {
   isExportBusy,
@@ -33,7 +35,6 @@ import {
 import { ThemeSwatchCard } from "@/features/editor/ThemeSwatchCard"
 import { usePosterGenerator } from "@/features/editor/usePosterGenerator"
 import { geocodeCity } from "@/features/geocode/nominatim"
-import { displayLabelsFromGeocodeResult } from "@/features/geocode/displayLabels"
 import { usePlaceBoundary } from "@/features/boundary/usePlaceBoundary"
 import { MapPosterPreview } from "@/features/tiles/MapPosterPreview"
 import type { MapPosterHandle } from "@/features/tiles/mapPosterRef"
@@ -42,7 +43,7 @@ import {
   type MapPreviewStatus,
 } from "@/features/tiles/mapPreviewStatus"
 import { createEmptyCustomTheme, listThemes } from "@/features/themes/themeRegistry"
-import { ensureNotoFamilyLoaded, notoFamilyForScript } from "@/lib/notoFonts"
+import { ensureNotoFamilyLoaded } from "@/lib/notoFonts"
 import type { PosterTheme } from "@/lib/types"
 import { encodePosterState, readStateFromLocation } from "@/lib/urlState"
 import {
@@ -181,37 +182,14 @@ export function EditorApp() {
             return
           }
 
-          const suggested = result.suggestedRadiusMeters
-          const nextDisplay = displayLabelsFromGeocodeResult(result)
           setConfig((current) => ({
             ...current,
-            geocode: { city: placeCity, country: placeCountry },
-            display: nextDisplay,
-            fontFamily:
-              nextDisplay.scriptFamily != null
-                ? notoFamilyForScript(nextDisplay.scriptFamily)
-                : current.fontFamily,
-            placeOsmType: result.osmType,
-            placeOsmId: result.osmId,
-            viewport: viewportFromPlaceLookup(current, result),
+            ...applyGeocodeToPoster(current, { city: placeCity, country: placeCountry }, result),
           }))
-          setPlaceLookupMessage(
-            suggested != null
-              ? `Suggested map radius ${Math.round(suggested)} m from place size. The preview updates live.`
-              : "Place found. The preview updates live.",
-          )
+          setPlaceLookupMessage(placeLookupSuccessMessage(result))
         } catch (error) {
           if (!cancelled) {
-            const message = error instanceof Error ? error.message : ""
-            if (message.startsWith("429:")) {
-              setPlaceLookupMessage(
-                "Geocoding service is busy — wait a moment and try again.",
-              )
-            } else {
-              setPlaceLookupMessage(
-                "Place lookup failed — check spelling, or use Coordinates.",
-              )
-            }
+            setPlaceLookupMessage(placeLookupFailureMessage(error))
           }
         } finally {
           if (!cancelled) {

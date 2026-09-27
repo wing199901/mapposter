@@ -91,3 +91,45 @@ export function clearDevEdgeBoundaryCache(): void {
 export function getDevEdgeGeocodeCacheTtlMs(): number {
   return CACHE_TTL_MS
 }
+
+function geocodeBodyFromCache(entry: DevGeocodeCacheEntry) {
+  return {
+    latitude: entry.latitude,
+    longitude: entry.longitude,
+    displayName: entry.displayName,
+    placeLocalName: entry.placeLocalName,
+    placeLatinName: entry.placeLatinName,
+    countryLocalName: entry.countryLocalName,
+    countryLatinName: entry.countryLatinName,
+    countryCode: entry.countryCode,
+    suggestedRadiusMeters: entry.suggestedRadiusMeters,
+    osmType: entry.osmType,
+    osmId: entry.osmId,
+  }
+}
+
+/** Process-local edge cache shared by the Vite dev server and the Docker self-host. */
+export const processEdgeCache = {
+  async readGeocode(city: string, country: string) {
+    const cached = readDevEdgeGeocode(city, country)
+    return cached ? geocodeBodyFromCache(cached) : null
+  },
+  async writeGeocode(
+    city: string,
+    country: string,
+    result: Omit<DevGeocodeCacheEntry, "fetchedAt">,
+  ) {
+    writeDevEdgeGeocode(city, country, result)
+  },
+  async readBoundary(osmType: string, osmId: number, radiusMeters?: number) {
+    return readDevEdgeBoundary(osmType, osmId, radiusMeters)?.geometry ?? null
+  },
+  async writeBoundary(
+    osmType: string,
+    osmId: number,
+    geometry: DevBoundaryCacheEntry["geometry"],
+    radiusMeters?: number,
+  ) {
+    writeDevEdgeBoundary(osmType, osmId, geometry, radiusMeters)
+  },
+}

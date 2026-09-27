@@ -11,21 +11,15 @@ import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
 import { BoundaryBlurOverlay } from "@/features/boundary/BoundaryBlurOverlay"
-import { posterFontStack } from "@/lib/notoFonts"
-import { formatCoordinates, formatPosterDisplayLines } from "@/lib/scriptDetection"
 import type { PosterConfig, PosterTheme } from "@/lib/types"
 
-import { EXPORT_ATTRIBUTION } from "./constants"
 import type { MapPosterHandle } from "./mapPosterRef"
 import {
   createMapPreviewStatusPublisher,
   type MapPreviewStatus,
 } from "./mapPreviewStatus"
-import { fitPairLineTypographyForPoster, placeRuleSpan } from "./pairLineTypography"
-import {
-  POSTER_ATTRIBUTION_FROM_RIGHT,
-  posterTypographyLayout,
-} from "./posterTypographyLayout"
+import { buildPosterLettering } from "./posterLettering"
+import { POSTER_ATTRIBUTION_FROM_RIGHT } from "./posterTypographyLayout"
 import { posterBottomVignetteCss, posterTopVignetteCss } from "./posterVignette"
 import { previewDisplaySize } from "./previewDisplaySize"
 import { themeToMapStyle } from "./themeToMapStyle"
@@ -232,61 +226,34 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
       mapLoaded,
     ])
 
-    const displayLines = formatPosterDisplayLines(config.display)
-    const coords = formatCoordinates(config.viewport.latitude, config.viewport.longitude)
-    const typography = posterTypographyLayout(displaySize.widthPx, displaySize.heightPx)
-    const { fonts, fromBottom, fadeBottomStart } = typography
-    const fontStack = posterFontStack(config.fontFamily, config.display.scriptFamily)
-
-    const pairFits = useMemo(() => {
-      if (typeof document === "undefined") {
-        return { city: null, country: null }
-      }
-      const canvas = document.createElement("canvas")
-      const ctx = canvas.getContext("2d")
-      if (!ctx) {
-        return { city: null, country: null }
-      }
-      return {
-        city: fitPairLineTypographyForPoster({
-          role: "city",
-          baseFontSize: fonts.city,
-          local: displayLines.city.local,
-          latin: displayLines.city.latin,
-          posterWidthPx: displaySize.widthPx,
-          fontStack,
-          ctx,
-        }),
-        country: fitPairLineTypographyForPoster({
-          role: "country",
-          baseFontSize: fonts.country,
-          local: displayLines.country.local,
-          latin: displayLines.country.latin,
-          posterWidthPx: displaySize.widthPx,
-          fontStack,
-          ctx,
-        }),
-      }
+    const lettering = useMemo(() => {
+      const canvas = typeof document === "undefined" ? null : document.createElement("canvas")
+      const ctx = canvas?.getContext("2d") ?? undefined
+      return buildPosterLettering({
+        widthPx: displaySize.widthPx,
+        heightPx: displaySize.heightPx,
+        display: config.display,
+        fontFamily: config.fontFamily,
+        viewport: config.viewport,
+        ctx,
+      })
     }, [
-      displayLines.city.local,
-      displayLines.city.latin,
-      displayLines.country.local,
-      displayLines.country.latin,
+      config.display,
+      config.fontFamily,
+      config.viewport,
+      displaySize.heightPx,
       displaySize.widthPx,
-      fonts.city,
-      fonts.country,
-      fontStack,
     ])
-
-    const cityFontSize = pairFits.city?.fontSize ?? fonts.city
-    const countryFontSize = pairFits.country?.fontSize ?? fonts.country
-    const cityLocalWeight = pairFits.city?.localWeight ?? 700
-    const cityLatinWeight = pairFits.city?.latinWeight ?? 500
-    const countryLocalWeight = pairFits.country?.localWeight ?? 500
-    const countryLatinWeight = pairFits.country?.latinWeight ?? 400
-    const cityGap = pairFits.city?.gapPx ?? Math.max(8, Math.round(fonts.city * 0.2))
-    const countryGap = pairFits.country?.gapPx ?? Math.max(6, Math.round(fonts.country * 0.18))
-    const placeRule = placeRuleSpan(displaySize.widthPx, pairFits.city?.widthPx)
+    const { fromBottom, fadeBottomStart, fontStack } = lettering
+    const cityFontSize = lettering.city.fontSize
+    const countryFontSize = lettering.country.fontSize
+    const cityLocalWeight = lettering.city.localWeight
+    const cityLatinWeight = lettering.city.latinWeight
+    const countryLocalWeight = lettering.country.localWeight
+    const countryLatinWeight = lettering.country.latinWeight
+    const cityGap = lettering.city.gapPx
+    const countryGap = lettering.country.gapPx
+    const placeRule = lettering.rule
 
     const overlayStyle = {
       "--poster-text": theme.text,
@@ -333,9 +300,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
           />
           <p
             className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap ${
-              !displayLines.city.latin && displayLines.city.applyLatinTracking
-                ? "tracking-wide"
-                : ""
+              lettering.cityApplyLatinTracking ? "tracking-wide" : ""
             }`}
             style={{
               bottom: `${fromBottom.city * 100}%`,
@@ -345,8 +310,8 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
               fontWeight: cityLocalWeight,
             }}
           >
-            {displayLines.city.local}
-            {displayLines.city.latin ? (
+            {lettering.city.local}
+            {lettering.city.latin ? (
               <span
                 className="align-baseline whitespace-nowrap"
                 style={{
@@ -355,7 +320,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
                   marginLeft: cityGap,
                 }}
               >
-                {displayLines.city.latin}
+                {lettering.city.latin}
               </span>
             ) : null}
           </p>
@@ -377,8 +342,8 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
               fontWeight: countryLocalWeight,
             }}
           >
-            {displayLines.country.local}
-            {displayLines.country.latin ? (
+            {lettering.country.local}
+            {lettering.country.latin ? (
               <span
                 className="align-baseline whitespace-nowrap"
                 style={{
@@ -387,7 +352,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
                   marginLeft: countryGap,
                 }}
               >
-                {displayLines.country.latin}
+                {lettering.country.latin}
               </span>
             ) : null}
           </p>
@@ -396,10 +361,10 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             style={{
               bottom: `${fromBottom.coordinates * 100}%`,
               color: theme.text,
-              fontSize: fonts.coordinates,
+              fontSize: lettering.fonts.coordinates,
             }}
           >
-            {coords}
+            {lettering.coordinates}
           </p>
           <p
             className="pointer-events-none absolute z-10 opacity-50"
@@ -407,11 +372,11 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
               right: `${POSTER_ATTRIBUTION_FROM_RIGHT * 100}%`,
               bottom: `${fromBottom.attribution * 100}%`,
               color: theme.text,
-              fontSize: fonts.attribution,
+              fontSize: lettering.fonts.attribution,
               lineHeight: 1,
             }}
           >
-            {EXPORT_ATTRIBUTION}
+            {lettering.attribution}
           </p>
         </div>
       </div>

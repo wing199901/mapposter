@@ -3,9 +3,10 @@ import JSZip from "jszip"
 
 import { withExportMapSize } from "@/features/export/exportMapSize"
 import {
-  buildPosterPngFromMapCanvas,
+  buildPosterPng,
   buildPosterSvg,
   posterLayoutFromInches,
+  rasterizePosterSvg,
   svgToBlob,
   type BuildPosterSvgOptions,
 } from "@/features/export/svgExport"
@@ -40,14 +41,16 @@ export async function exportPosterSvg(
   await waitForMapIdle(map)
   const theme = loadTheme(config.themeId, config.customTheme)
   const layout = posterLayoutFromInches(config.widthInches, config.heightInches)
-  const svg = buildPosterSvg(
-    map,
-    theme,
-    config.viewport,
-    config.display,
-    config.fontFamily,
-    layout,
-    buildSvgOptions(config, boundaryGeometry),
+  const svg = await withExportMapSize(map, layout, config.viewport, async () =>
+    buildPosterSvg(
+      map,
+      theme,
+      config.viewport,
+      config.display,
+      config.fontFamily,
+      layout,
+      buildSvgOptions(config, boundaryGeometry),
+    ),
   )
   return svgToBlob(svg)
 }
@@ -61,7 +64,7 @@ export async function exportPosterPng(
   const theme = loadTheme(config.themeId, config.customTheme)
   const layout = posterLayoutFromInches(config.widthInches, config.heightInches)
   return withExportMapSize(map, layout, config.viewport, () =>
-    buildPosterPngFromMapCanvas(
+    buildPosterPng(
       map,
       theme,
       config.viewport,
@@ -85,18 +88,8 @@ export async function exportAllThemesZip(
 
   for (const themeId of THEME_IDS) {
     const theme = await applyThemeAndWait(map, config, themeId)
-    const svg = buildPosterSvg(
-      map,
-      theme,
-      config.viewport,
-      config.display,
-      config.fontFamily,
-      layout,
-      svgOptions,
-    )
-    zip.file(`${city}_${themeId}.svg`, svg)
-    const png = await withExportMapSize(map, layout, config.viewport, () =>
-      buildPosterPngFromMapCanvas(
+    const { svg, png } = await withExportMapSize(map, layout, config.viewport, async () => {
+      const svg = buildPosterSvg(
         map,
         theme,
         config.viewport,
@@ -104,8 +97,20 @@ export async function exportAllThemesZip(
         config.fontFamily,
         layout,
         svgOptions,
-      ),
-    )
+      )
+      const png = await rasterizePosterSvg(
+        svg,
+        map,
+        theme,
+        config.viewport,
+        config.display,
+        config.fontFamily,
+        layout,
+        svgOptions,
+      )
+      return { svg, png }
+    })
+    zip.file(`${city}_${themeId}.svg`, svg)
     zip.file(`${city}_${themeId}.png`, png)
   }
 

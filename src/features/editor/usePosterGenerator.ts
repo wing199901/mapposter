@@ -59,47 +59,54 @@ export function usePosterGenerator(
     return map
   }, [mapReady, mapRef])
 
-  const exportCurrentPng = useCallback(async () => {
+  const runExport = useCallback(async (busyMessage: string, doneMessage: string, work: () => Promise<Blob>, filename: string) => {
     setError(null)
-    setProgress({ phase: "exporting", message: "Exporting PNG…", progress: 0.5 })
+    setProgress({ phase: "exporting", message: busyMessage, progress: 0.5 })
+    try {
+      const blob = await work()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setProgress({ phase: "done", message: doneMessage, progress: 1 })
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Export failed"
+      setError(message)
+      setProgress({ phase: "error", message })
+    }
+  }, [])
+
+  const exportCurrentPng = useCallback(async () => {
     const map = requireMap()
-    const blob = await exportPosterPng(map, config, getBoundaryGeometry())
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = `${config.display.city}_${config.themeId}.png`
-    anchor.click()
-    URL.revokeObjectURL(url)
-    setProgress({ phase: "done", message: "Export complete", progress: 1 })
-  }, [config, getBoundaryGeometry, requireMap])
+    await runExport(
+      "Exporting PNG…",
+      "Export complete",
+      () => exportPosterPng(map, config, getBoundaryGeometry()),
+      `${config.display.city}_${config.themeId}.png`,
+    )
+  }, [config, getBoundaryGeometry, requireMap, runExport])
 
   const exportCurrentSvg = useCallback(async () => {
-    setError(null)
-    setProgress({ phase: "exporting", message: "Exporting SVG…", progress: 0.5 })
     const map = requireMap()
-    const blob = await exportPosterSvg(map, config, getBoundaryGeometry())
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = `${config.display.city}_${config.themeId}.svg`
-    anchor.click()
-    URL.revokeObjectURL(url)
-    setProgress({ phase: "done", message: "Export complete", progress: 1 })
-  }, [config, getBoundaryGeometry, requireMap])
+    await runExport(
+      "Exporting SVG…",
+      "Export complete",
+      () => exportPosterSvg(map, config, getBoundaryGeometry()),
+      `${config.display.city}_${config.themeId}.svg`,
+    )
+  }, [config, getBoundaryGeometry, requireMap, runExport])
 
   const exportAllThemes = useCallback(async () => {
-    setError(null)
-    setProgress({ phase: "exporting", message: "Exporting all themes…", progress: 0.5 })
     const map = requireMap()
-    const blob = await exportAllThemesZip(map, config, getBoundaryGeometry())
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = `${config.display.city}_all_themes.zip`
-    anchor.click()
-    URL.revokeObjectURL(url)
-    setProgress({ phase: "done", message: "Batch export complete", progress: 1 })
-  }, [config, getBoundaryGeometry, requireMap])
+    await runExport(
+      "Exporting all themes…",
+      "Batch export complete",
+      () => exportAllThemesZip(map, config, getBoundaryGeometry()),
+      `${config.display.city}_all_themes.zip`,
+    )
+  }, [config, getBoundaryGeometry, requireMap, runExport])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

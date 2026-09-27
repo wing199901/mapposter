@@ -12,6 +12,13 @@ function applyViewport(map: Map, viewport: Viewport, mapWidthPx: number): void {
   map.jumpTo({ center, zoom })
 }
 
+export class ExportMapSizeError extends Error {
+  constructor() {
+    super("Export failed because the preview could not be resized to the poster pixel size.")
+    this.name = "ExportMapSizeError"
+  }
+}
+
 export async function withExportMapSize<T>(
   map: Map,
   layout: { widthPx: number; heightPx: number },
@@ -20,7 +27,7 @@ export async function withExportMapSize<T>(
 ): Promise<T> {
   const shell = map.getContainer().closest("[data-poster-shell]") as HTMLElement | null
   if (!shell) {
-    return fn()
+    throw new ExportMapSizeError()
   }
 
   const captureW = Math.min(layout.widthPx, EXPORT_CAPTURE_MAX_PX)

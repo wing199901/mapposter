@@ -3,11 +3,13 @@ import { readFile } from "node:fs/promises"
 import { extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { processEdgeCache } from "../shared/devEdgeGeocodeCache.ts"
 import {
-  fetchNominatimBoundary,
   fetchNominatimGeocode,
   NOMINATIM_DEFAULT_CONTACT_EMAIL,
+  resolveBoundaryForMask,
 } from "../shared/nominatim.ts"
+import { handleBoundaryProxy, handleGeocodeProxy } from "../shared/proxyHandler.ts"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 const distDir = join(__dirname, "..", "dist")
@@ -57,44 +59,21 @@ createServer((request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`)
 
     if (url.pathname === "/api/geocode" && request.method === "GET") {
-      const city = url.searchParams.get("city")?.trim()
-      const country = url.searchParams.get("country")?.trim()
-      if (!city || !country) {
-        sendJson(response, 400, { error: "city and country are required" })
-        return
-      }
-
-      const upstream = await fetchNominatimGeocode(city, country, contactEmail)
-      if (!upstream.ok) {
-        sendJson(response, upstream.status === 404 ? 404 : 502, { error: upstream.error })
-        return
-      }
-      sendJson(response, 200, upstream.result)
+      const result = await handleGeocodeProxy(url.searchParams, processEdgeCache, (city, country) =>
+        fetchNominatimGeocode(city, country, contactEmail),
+      )
+      sendJson(response, result.status, result.body, result.headers)
       return
     }
 
     if (url.pathname === "/api/boundary" && request.method === "GET") {
-      const osmType = url.searchParams.get("osmType")?.trim()
-      const osmIdRaw = url.searchParams.get("osmId")?.trim()
-      const osmId = osmIdRaw ? Number(osmIdRaw) : NaN
-
-      if (!osmType || !Number.isFinite(osmId)) {
-        sendJson(response, 400, { error: "osmType and osmId are required" })
-        return
-      }
-
-      if (osmType !== "node" && osmType !== "way" && osmType !== "relation") {
-        sendJson(response, 400, { error: "osmType must be node, way, or relation" })
-        return
-      }
-
-      const upstream = await fetchNominatimBoundary(osmType, osmId, contactEmail)
-      if (!upstream.ok) {
-        sendJson(response, upstream.status === 404 ? 404 : 502, { error: upstream.error })
-        return
-      }
-
-      sendJson(response, 200, { geometry: upstream.geometry })
+      const result = await handleBoundaryProxy(
+        url.searchParams,
+        processEdgeCache,
+        (osmType, osmId, radiusMeters) =>
+          resolveBoundaryForMask(osmType, osmId, contactEmail, radiusMeters),
+      )
+      sendJson(response, result.status, result.body, result.headers)
       return
     }
 

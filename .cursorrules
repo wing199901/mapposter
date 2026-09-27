@@ -62,7 +62,7 @@ Keep domain logic in `src/features/<domain>/`. UI composition lives in `EditorAp
 4. **Size limits**: `MAX_INCHES = 20`. Clamp width/height via `clampInches()` in `src/features/export/presets.ts`.
 5. **Tiles**: OpenFreeMap vector tiles via TileJSON (`OPENFREEMAP_TILEJSON` in `constants.ts`) — never hardcode `{z}/{x}/{y}.pbf` (returns empty tiles).
 6. **Layers**: Roads, water, parks, optional buildings — per-layer toggles (ADR 0004). Style in `themeToMapStyle.ts`.
-7. **Draw order** (MapLibre layer stack): background → water → waterway → parks → buildings (optional) → roads → rail → ferry → boundary mask (optional, top).
+7. **Draw order** (MapLibre layer stack): background → water → waterway → parks → buildings (optional) → roads → rail → ferry. Boundary mask sits above that stack: frosted in preview, solid poster-background fill in the SVG.
 8. **Typography**: HTML overlay in preview; SVG `<text>` in export. `scriptDetection.ts` formats city labels and coordinates.
 9. **Attribution**: Exports include `© OpenStreetMap contributors · OpenMapTiles` (see `EXPORT_ATTRIBUTION`).
 
@@ -88,7 +88,7 @@ Nominatim geocoding **must** go through the app proxy — never call Nominatim d
 
 Vector tiles (OpenFreeMap) are fetched directly from the browser — not proxied. A future tile proxy requires a new ADR.
 
-When changing proxy behaviour, update **both** `vite.dev-proxy.ts` and the matching `functions/api/*.ts` file in the same change set. Geocode KV keys must use [`shared/proxyCacheKeys.ts`](shared/proxyCacheKeys.ts). Keep `User-Agent` strings consistent (`mapposter-web/1.0`).
+When changing proxy behaviour, update the shared handler in `shared/proxyHandler.ts` and its adapters in the same change set: `vite.dev-proxy.ts`, `functions/api/*.ts`, and `server/index.ts`. Pages uses the KV adapter. Vite and Docker share the process-local cache. Geocode KV keys must use [`shared/proxyCacheKeys.ts`](shared/proxyCacheKeys.ts). Keep `User-Agent` strings consistent (`mapposter-web/1.0`).
 
 ## 💾 State & Persistence
 

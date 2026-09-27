@@ -2,7 +2,7 @@
 
 ## Poster
 
-A finished exportable image (PNG at 300 DPI) combining map layers and typography for a chosen city viewport.
+The exportable drawing for a chosen viewport: map features plus typography. The SVG is that drawing. The PNG is the same drawing rasterized at 300 DPI.
 
 ## Theme
 
@@ -47,11 +47,15 @@ The city and country strings sent to Nominatim to resolve coordinates. May be CJ
 
 ## Geocode cache
 
-Resolved coordinates keyed by normalized city and country strings, stored in the browser to skip repeat Nominatim lookups.
+A previous Geocode query result kept in the browser, keyed by the normalized city and country. A hit stands in for a fresh lookup, including the names and the place used for the Place boundary.
+
+## Place lookup
+
+The resolution of a Geocode query into Display labels and a Viewport for that place. A later manual edit changes only the label strings. The next successful lookup replaces those labels from the place again.
 
 ## Edge geocode cache
 
-Cross-user geocode results cached at the proxy layer so repeat lookups can skip Nominatim without relying on a single browser session.
+Geocode results kept by the proxy so a repeat Geocode query can skip Nominatim. On the shared deployment the cache is cross-user. On a single-process self-host or dev proxy it lasts only for that process.
 
 ## Layer visibility
 
@@ -59,7 +63,7 @@ Per-layer on/off toggles for map features (water, waterways, parks, buildings, r
 
 ## Boundary mask
 
-An inverted place-admin polygon fill drawn in the poster background color above map layers. Hides features outside the geocoded place visually without stopping tile fetches.
+The area outside the Place boundary, drawn above the map, using one geometry. Preview frosts it so the poster background shows through a blur; export fills it solid with the poster background color. It hides features outside the place without stopping tile fetches.
 
 ## Place boundary
 
@@ -71,7 +75,7 @@ A named export size pairing width and height in inches at 300 DPI (for example A
 
 ## Export job
 
-A single SVG/PNG or batch ZIP export cycle. Map must be idle before export starts.
+One capture of the Poster at its export pixel size. Produces the SVG and the PNG, or a batch ZIP of both for each Theme. The map must be idle before it starts.
 
 ## Preview render
 

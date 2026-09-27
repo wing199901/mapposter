@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (supersedes ADR 0001 rendering approach)
+Accepted (supersedes ADR 0001 rendering approach). PNG-from-SVG is reaffirmed by ADR 0008 after the code briefly composited PNG from the map canvas.
 
 ## Context
 

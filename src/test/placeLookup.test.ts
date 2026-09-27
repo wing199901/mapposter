@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  applyGeocodeToPoster,
+  placeLookupFailureMessage,
+  placeLookupSuccessMessage,
   shouldSkipAutomaticPlaceLookup,
   viewportFromPlaceLookup,
 } from "@/features/editor/placeLookup"
@@ -81,6 +84,55 @@ describe("viewportFromPlaceLookup", () => {
       longitude: suggestedResult.longitude,
       radiusMeters: suggestedResult.suggestedRadiusMeters,
     })
+  })
+
+  it("replaces display labels and the font from a Japanese place", () => {
+    const applied = applyGeocodeToPoster(
+      { viewport: framedViewport, centerLocked: false, fontFamily: "Roboto" },
+      { city: "京都", country: "Japan" },
+      {
+        latitude: 35.0116,
+        longitude: 135.7681,
+        displayName: "Kyoto, Japan",
+        placeLocalName: "京都",
+        placeLatinName: "Kyoto",
+        countryLocalName: "日本",
+        countryLatinName: "Japan",
+        countryCode: "jp",
+        suggestedRadiusMeters: 9000,
+        osmType: "relation",
+        osmId: 3577955,
+      },
+    )
+
+    expect(applied.display.city).toBe("京都")
+    expect(applied.display.cityLatin).toBe("Kyoto")
+    expect(applied.fontFamily).toBe("Noto Sans JP")
+    expect(applied.placeOsmId).toBe(3577955)
+    expect(applied.viewport.radiusMeters).toBe(9000)
+    expect(applied.geocode).toEqual({ city: "京都", country: "Japan" })
+    expect(placeLookupSuccessMessage({ suggestedRadiusMeters: 9000 })).toContain("9000")
+  })
+
+  it("keeps the current font when the place has no local name", () => {
+    const applied = applyGeocodeToPoster(
+      { viewport: framedViewport, centerLocked: true, fontFamily: "Roboto" },
+      { city: "Paris", country: "France" },
+      {
+        latitude: 48.85,
+        longitude: 2.35,
+        displayName: "Paris, France",
+        placeLatinName: "Paris",
+        countryLatinName: "France",
+      },
+    )
+    expect(applied.fontFamily).toBe("Roboto")
+    expect(applied.viewport).toEqual(framedViewport)
+  })
+
+  it("turns a rate limit into the busy message", () => {
+    expect(placeLookupFailureMessage(new Error("429:slow"))).toContain("busy")
+    expect(placeLookupFailureMessage(new Error("404:missing"))).toContain("spelling")
   })
 
   it("keeps the current radius when unlocked and no suggestion is present", () => {
