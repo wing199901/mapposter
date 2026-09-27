@@ -20,6 +20,7 @@ import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ExportPopover } from "@/features/editor/ExportPopover"
+import { PlaceNameFields } from "@/features/editor/PlaceNameFields"
 import { LayerTogglesSection } from "@/features/editor/LayerTogglesSection"
 import { isKnownPosterFont, POSTER_FONT_OPTIONS } from "@/features/editor/fontOptions"
 import {
@@ -84,10 +85,9 @@ export function EditorApp() {
 
   const [themeJson, setThemeJson] = useState("")
   const [locationMode, setLocationMode] = useState<"search" | "coordinates">("search")
-  const [placeCity, setPlaceCity] = useState(config.geocode.city)
-  const [placeCountry, setPlaceCountry] = useState(config.geocode.country)
   const [placeLookupMessage, setPlaceLookupMessage] = useState<string | null>(null)
   const [isPlaceLookingUp, setIsPlaceLookingUp] = useState(false)
+  const lookupSeq = useRef(0)
   const [mapStatus, setMapStatus] = useState<MapPreviewStatus>(INITIAL_MAP_PREVIEW_STATUS)
   const themes = useMemo(() => listThemes(), [])
   const isBusy = isExportBusy(progress)
@@ -116,96 +116,77 @@ export function EditorApp() {
     ensureNotoFamilyLoaded(config.display.scriptFamily)
   }, [config.display.scriptFamily])
 
-  useEffect(() => {
-    setPlaceCity(config.geocode.city)
-    setPlaceCountry(config.geocode.country)
-  }, [config.geocode.city, config.geocode.country])
+  const cancelPlaceLookup = useCallback(() => {
+    lookupSeq.current += 1
+    setIsPlaceLookingUp(false)
+  }, [])
 
-  useEffect(() => {
-    if (locationMode !== "search") {
-      setPlaceLookupMessage(null)
-      setIsPlaceLookingUp(false)
-      return
-    }
-
-    const city = placeCity.trim()
-    const country = placeCountry.trim()
-
-    const syncTimer = window.setTimeout(() => {
+  const handlePlaceDraft = useCallback(
+    (city: string, country: string) => {
       setConfig((current) => {
-        const placeChanged =
-          current.geocode.city !== placeCity || current.geocode.country !== placeCountry
-        if (!placeChanged) {
+        if (current.geocode.city === city && current.geocode.country === country) {
           return current
         }
-
         return {
           ...current,
-          // Changing City/Country unlocks auto-center for the next lookup.
-          centerLocked: placeChanged ? false : current.centerLocked,
-          geocode: { city: placeCity, country: placeCountry },
+          centerLocked: false,
+          geocode: { city, country },
         }
       })
-    }, 200)
+    },
+    [setConfig],
+  )
 
-    if (!city || !country) {
-      setPlaceLookupMessage(null)
-      setIsPlaceLookingUp(false)
-      return () => {
-        window.clearTimeout(syncTimer)
+  const handlePlaceLookup = useCallback(
+    (city: string, country: string) => {
+      const trimmedCity = city.trim()
+      const trimmedCountry = country.trim()
+      if (!trimmedCity || !trimmedCountry) {
+        setPlaceLookupMessage(null)
+        setIsPlaceLookingUp(false)
+        return
       }
-    }
 
-    const placeEditedByUser =
-      placeCity !== initialPlaceRef.current.city ||
-      placeCountry !== initialPlaceRef.current.country
-    if (
-      shouldSkipAutomaticPlaceLookup({
-        hydratedFromShareHash: hydratedFromShareHashRef.current,
-        centerLocked: initialCenterLockedRef.current,
-        placeEditedByUser,
-      })
-    ) {
-      return () => {
-        window.clearTimeout(syncTimer)
+      const placeEditedByUser =
+        city !== initialPlaceRef.current.city || country !== initialPlaceRef.current.country
+      if (
+        shouldSkipAutomaticPlaceLookup({
+          hydratedFromShareHash: hydratedFromShareHashRef.current,
+          centerLocked: initialCenterLockedRef.current,
+          placeEditedByUser,
+        })
+      ) {
+        return
       }
-    }
 
-    let cancelled = false
-    const lookupTimer = window.setTimeout(() => {
+      const seq = ++lookupSeq.current
+      setIsPlaceLookingUp(true)
+      setPlaceLookupMessage("Looking up place size…")
       void (async () => {
-        setIsPlaceLookingUp(true)
-        setPlaceLookupMessage("Looking up place size…")
         try {
-          const result = await geocodeCity({ city, country })
-          if (cancelled) {
+          const result = await geocodeCity({ city: trimmedCity, country: trimmedCountry })
+          if (seq !== lookupSeq.current) {
             return
           }
-
           setConfig((current) => ({
             ...current,
-            ...applyGeocodeToPoster(current, { city: placeCity, country: placeCountry }, result),
+            ...applyGeocodeToPoster(current, { city, country }, result),
           }))
           setPlaceLookupMessage(placeLookupSuccessMessage(result))
         } catch (error) {
-          if (!cancelled) {
-            setPlaceLookupMessage(placeLookupFailureMessage(error))
+          if (seq !== lookupSeq.current) {
+            return
           }
+          setPlaceLookupMessage(placeLookupFailureMessage(error))
         } finally {
-          if (!cancelled) {
+          if (seq === lookupSeq.current) {
             setIsPlaceLookingUp(false)
           }
         }
       })()
-    }, 700)
-
-    return () => {
-      cancelled = true
-      setIsPlaceLookingUp(false)
-      window.clearTimeout(syncTimer)
-      window.clearTimeout(lookupTimer)
-    }
-  }, [locationMode, placeCity, placeCountry, setConfig])
+    },
+    [setConfig],
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -271,26 +252,14 @@ export function EditorApp() {
                   Type a city and country — labels and suggested map radius update after you pause
                   typing. The map preview updates live.
                 </p>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={placeCity}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) => setPlaceCity(event.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    value={placeCountry}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) => setPlaceCountry(event.target.value)}
-                  />
-                </div>
+                <PlaceNameFields
+                  city={config.geocode.city}
+                  country={config.geocode.country}
+                  active={locationMode === "search"}
+                  onActivity={cancelPlaceLookup}
+                  onDraft={handlePlaceDraft}
+                  onLookup={handlePlaceLookup}
+                />
               </TabsContent>
 
               <TabsContent value="coordinates" className="flex flex-col gap-4">
