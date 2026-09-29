@@ -3,16 +3,19 @@ import { DEFAULT_LAYER_VISIBILITY } from "@/lib/types"
 
 /**
  * Cold-start poster when URL hash and autosave are both absent.
- * Hong Kong bilingual lettering is the product’s first-session story;
+ * Hong Kong SAR bilingual lettering is the product’s first-session story;
  * Latin places remain first-class via search and examples.
+ *
+ * Viewport: harbour-centred SAR overview (22.3193°N, 114.1694°E, 30 km)
+ * so Island, Kowloon, and the near New Territories read as one poster.
  */
 export const DEFAULT_CONFIG: PosterConfig = {
-  geocode: { city: "Hong Kong Island", country: "Hong Kong" },
-  viewport: { latitude: 22.2644, longitude: 114.1912, radiusMeters: 12000 },
+  geocode: { city: "Hong Kong", country: "Hong Kong" },
+  viewport: { latitude: 22.3193, longitude: 114.1694, radiusMeters: 30000 },
   themeId: "noir",
   display: {
-    city: "香港島",
-    cityLatin: "Hong Kong Island",
+    city: "香港",
+    cityLatin: "Hong Kong",
     country: "香港",
     countryLatin: "Hong Kong",
     scriptFamily: "hk",
@@ -43,13 +46,13 @@ export const POSTER_EXAMPLES: PosterExample[] = [
   {
     id: "hong-kong",
     label: "Hong Kong",
-    hint: "Bilingual · Noto Sans HK",
+    hint: "SAR · Noto Sans HK",
     patch: {
-      geocode: { city: "Hong Kong Island", country: "Hong Kong" },
-      viewport: { latitude: 22.2644, longitude: 114.1912, radiusMeters: 12000 },
+      geocode: { city: "Hong Kong", country: "Hong Kong" },
+      viewport: { latitude: 22.3193, longitude: 114.1694, radiusMeters: 30000 },
       display: {
-        city: "香港島",
-        cityLatin: "Hong Kong Island",
+        city: "香港",
+        cityLatin: "Hong Kong",
         country: "香港",
         countryLatin: "Hong Kong",
         scriptFamily: "hk",

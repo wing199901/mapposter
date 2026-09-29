@@ -100,11 +100,11 @@ test.describe("Map Poster Studio", () => {
     await expect(page.getByLabel("Height (in)")).toHaveValue("3.6")
   })
 
-  test("shows place lookup hint after Hong Kong Island geocode", async ({ page }) => {
+  test("shows place lookup hint after user edits away from SAR default", async ({ page }) => {
     await mockGeocodeApi(page)
     await page.goto("/")
 
-    // Default is already Hong Kong Island + centerLocked; edit the city so lookup runs.
+    // Default is already Hong Kong SAR + centerLocked; edit the city so lookup runs.
     await page.getByLabel("City").fill("Kowloon")
     await page.getByLabel("Country").fill("Hong Kong")
 
