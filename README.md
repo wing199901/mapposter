@@ -17,9 +17,11 @@ Inspired by [originalankur/maptoposter](https://github.com/originalankur/maptopo
 
 ## Features
 
+- Cold-start bilingual Hong Kong demo (regional Noto Sans HK); Latin letter-spacing for Western places
+- OSM namedetails → local + Latin name pairs when the place has a CJK local name
 - 17 ported themes from upstream JSON
 - City/country geocoding with manual coordinate override
-- Radius control, display labels, Google Fonts family
+- Radius control, display labels, Google Fonts + regional Noto families
 - Export presets (Instagram, A4, 4K, default poster)
 - Shareable URL state + local autosave
 - Theme JSON editor

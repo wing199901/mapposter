@@ -19,6 +19,7 @@ import { Separator, Textarea } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { POSTER_EXAMPLES } from "@/features/editor/defaultPosterConfig"
 import { ExportPopover } from "@/features/editor/ExportPopover"
 import { PlaceNameFields } from "@/features/editor/PlaceNameFields"
 import { LayerTogglesSection } from "@/features/editor/LayerTogglesSection"
@@ -188,18 +189,39 @@ export function EditorApp() {
     [setConfig],
   )
 
+  const applyPosterExample = useCallback(
+    (exampleId: string) => {
+      const example = POSTER_EXAMPLES.find((item) => item.id === exampleId)
+      if (!example) {
+        return
+      }
+      setLocationMode("search")
+      setConfig((current) => ({
+        ...current,
+        ...example.patch,
+        customTheme: undefined,
+        boundaryMaskEnabled: false,
+        placeOsmType: undefined,
+        placeOsmId: undefined,
+      }))
+      setPlaceLookupMessage(null)
+    },
+    [setConfig],
+  )
+
   return (
     <div className="min-h-screen bg-background">
       <Toaster richColors position="top-center" />
       <header className="border-b bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 lg:px-6">
-          <div className="flex flex-col gap-1">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-5 lg:px-6">
+          <div className="flex min-w-0 flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <Sparkles data-icon="inline-start" className="size-5 text-primary" />
+              <Sparkles data-icon="inline-start" className="size-5 shrink-0 text-primary" />
               <h1 className="text-xl font-semibold tracking-tight">Map Poster Studio</h1>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Turn any city into a minimalist map poster — client-side, print-ready, Cloudflare Pages friendly.
+            <p className="max-w-xl text-sm text-muted-foreground">
+              Bilingual map posters with regional CJK lettering — Hong Kong–ready Noto families,
+              live preview, print-ready SVG at 300 DPI.
             </p>
           </div>
           <div className="flex min-w-0 flex-1 flex-col items-end gap-2 sm:max-w-sm">
@@ -225,19 +247,50 @@ export function EditorApp() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1600px] gap-4 p-4 lg:grid-cols-2 lg:p-6">
-        <div className="flex flex-col gap-4">
+      <main className="mx-auto grid max-w-[1600px] gap-5 p-4 lg:grid-cols-2 lg:gap-6 lg:p-6">
+        <div className="flex flex-col gap-5">
           <Card className="h-fit">
-          <CardHeader>
+          <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2">
               <MapPin className="size-4" />
               Location
             </CardTitle>
             <CardDescription>
-              Choose a place name to look up coordinates, or enter lat/lon directly.
+              Search a place for bilingual OSM names, or enter coordinates. CJK places load the
+              matching regional Noto family.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Examples
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {POSTER_EXAMPLES.map((example) => {
+                  const selected =
+                    config.geocode.city === example.patch.geocode.city &&
+                    config.geocode.country === example.patch.geocode.country
+                  return (
+                    <Button
+                      key={example.id}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "secondary" : "ghost"}
+                      className="h-auto px-2.5 py-1.5 text-left"
+                      onClick={() => applyPosterExample(example.id)}
+                    >
+                      <span className="flex flex-col items-start gap-0.5">
+                        <span className="text-sm font-medium">{example.label}</span>
+                        <span className="text-[11px] font-normal text-muted-foreground">
+                          {example.hint}
+                        </span>
+                      </span>
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+
             <Tabs
               value={locationMode}
               onValueChange={(value) => setLocationMode(value as "search" | "coordinates")}
@@ -249,8 +302,8 @@ export function EditorApp() {
 
               <TabsContent value="search" className="flex flex-col gap-4">
                 <p className="text-xs text-muted-foreground">
-                  Type a city and country — labels and suggested map radius update after you pause
-                  typing. The map preview updates live.
+                  Type a city and country — poster labels (including local + Latin pairs when OSM
+                  provides them) and map radius update after you pause typing.
                 </p>
                 <PlaceNameFields
                   city={config.geocode.city}
@@ -382,7 +435,7 @@ export function EditorApp() {
           </Card>
 
           <Card className="h-fit">
-          <CardHeader>
+          <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2">
               <Palette className="size-4" />
               Style
@@ -399,8 +452,8 @@ export function EditorApp() {
 
               <TabsContent value="themes">
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Each card shows a mini map preview and color chips for background, water, parks,
-                  roads, and label text.
+                  Each swatch shows a mini map and chips for background, water, parks, roads, and
+                  label text.
                 </p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {themes.map(({ id, theme: item }) => (
@@ -455,8 +508,10 @@ export function EditorApp() {
               <TabsContent value="labels">
                 <div className="flex flex-col gap-4">
                   <p className="text-xs text-muted-foreground">
-                    Poster text synced from Location when using place name. Edit here to override
-                    strings only — bilingual pair layout stays tied to the last geocode.
+                    When OSM supplies a local CJK name, the poster uses a bilingual pair (local +
+                    Latin at the same size). Edit to override lettering only — pair layout stays
+                    tied to the last geocode. Regional Noto (HK / TC / SC / JP / KR) loads from the
+                    place script.
                   </p>
                   {config.display.hasPlaceLocalName ? (
                     <>
@@ -518,6 +573,16 @@ export function EditorApp() {
                           }
                         />
                       </div>
+                      {config.display.scriptFamily ? (
+                        <p className="text-xs text-muted-foreground">
+                          Active script family:{" "}
+                          <span className="font-medium uppercase text-foreground">
+                            {config.display.scriptFamily}
+                          </span>
+                          {" · "}
+                          Font follows the place unless you pick another family below.
+                        </p>
+                      ) : null}
                     </>
                   ) : (
                     <>
@@ -547,6 +612,10 @@ export function EditorApp() {
                           }
                         />
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        Latin-only place — letter-spaced city label. Search a CJK city for bilingual
+                        pairs.
+                      </p>
                     </>
                   )}
                   <div className="flex flex-col gap-2">
@@ -583,12 +652,12 @@ export function EditorApp() {
         </div>
 
         <Card className="flex h-fit flex-col">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-4">
             <div className="flex flex-col gap-1.5">
               <CardTitle>Preview</CardTitle>
               <CardDescription>
                 {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI ·{" "}
-                {config.widthInches} × {config.heightInches} in preview
+                {config.widthInches} × {config.heightInches} in
               </CardDescription>
             </div>
             <ExportPopover
@@ -603,7 +672,7 @@ export function EditorApp() {
           </CardHeader>
           <CardContent className="flex flex-col">
             <div className="flex flex-col gap-3">
-              <div className="flex justify-center rounded-xl border bg-muted/30 p-4">
+              <div className="flex justify-center rounded-xl border bg-muted/30 p-4 lg:p-5">
                 <MapPosterPreview
                   ref={mapRef}
                   config={config}
