@@ -7,19 +7,21 @@ import { DEFAULT_LAYER_VISIBILITY } from "@/lib/types"
  * Latin places remain first-class via search and examples.
  */
 export const DEFAULT_CONFIG: PosterConfig = {
-  geocode: { city: "Hong Kong", country: "Hong Kong" },
-  viewport: { latitude: 22.3193, longitude: 114.1694, radiusMeters: 25000 },
+  geocode: { city: "Hong Kong Island", country: "Hong Kong" },
+  viewport: { latitude: 22.2644, longitude: 114.1912, radiusMeters: 12000 },
   themeId: "noir",
   display: {
-    city: "香港",
-    cityLatin: "Hong Kong",
+    city: "香港島",
+    cityLatin: "Hong Kong Island",
     country: "香港",
     countryLatin: "Hong Kong",
     scriptFamily: "hk",
     hasPlaceLocalName: true,
   },
   fontFamily: "Noto Sans HK",
-  centerLocked: false,
+  // Skip cold-start Nominatim so the baked bilingual poster stays stable;
+  // place edits and Examples still re-run lookup.
+  centerLocked: true,
   widthInches: 12,
   heightInches: 16,
   layerVisibility: DEFAULT_LAYER_VISIBILITY,
@@ -43,11 +45,11 @@ export const POSTER_EXAMPLES: PosterExample[] = [
     label: "Hong Kong",
     hint: "Bilingual · Noto Sans HK",
     patch: {
-      geocode: { city: "Hong Kong", country: "Hong Kong" },
-      viewport: { latitude: 22.3193, longitude: 114.1694, radiusMeters: 25000 },
+      geocode: { city: "Hong Kong Island", country: "Hong Kong" },
+      viewport: { latitude: 22.2644, longitude: 114.1912, radiusMeters: 12000 },
       display: {
-        city: "香港",
-        cityLatin: "Hong Kong",
+        city: "香港島",
+        cityLatin: "Hong Kong Island",
         country: "香港",
         countryLatin: "Hong Kong",
         scriptFamily: "hk",
@@ -55,7 +57,7 @@ export const POSTER_EXAMPLES: PosterExample[] = [
       },
       fontFamily: "Noto Sans HK",
       themeId: "noir",
-      centerLocked: false,
+      centerLocked: true,
     },
   },
   {

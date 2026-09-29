@@ -104,7 +104,8 @@ test.describe("Map Poster Studio", () => {
     await mockGeocodeApi(page)
     await page.goto("/")
 
-    await page.getByLabel("City").fill("Hong Kong Island")
+    // Default is already Hong Kong Island + centerLocked; edit the city so lookup runs.
+    await page.getByLabel("City").fill("Kowloon")
     await page.getByLabel("Country").fill("Hong Kong")
 
     await expect(
