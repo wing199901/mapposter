@@ -60,6 +60,8 @@ test.describe("Map Poster Studio", () => {
   test("loads editor shell with live preview", async ({ page }) => {
     await page.goto("/")
     await expect(page.getByRole("heading", { name: "Map Poster Studio" })).toBeVisible()
+    await expect(page.getByText(/Bilingual map posters with regional CJK lettering/i)).toBeVisible()
+    await expect(page.getByRole("button", { name: /Hong Kong/i }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
     await expect(page.getByText("Drag to pan and scroll to zoom")).toBeVisible()
   })
@@ -68,12 +70,25 @@ test.describe("Map Poster Studio", () => {
     await mockGeocodeApi(page)
     await page.goto("/")
 
-    await page.getByRole("button", { name: "Noir" }).click()
-    await expect(page.locator("button.border-primary", { hasText: "Noir" })).toBeVisible()
+    await page.getByRole("button", { name: "Terracotta" }).click()
+    await expect(page.locator("button.border-primary", { hasText: "Terracotta" })).toBeVisible()
 
     await expect
       .poll(async () => page.evaluate(() => window.location.hash))
       .toMatch(/^#p=/)
+  })
+
+  test("applies Kyoto example and keeps Latin Paris available", async ({ page }) => {
+    await mockGeocodeApi(page)
+    await page.goto("/")
+
+    await page.getByRole("button", { name: /Kyoto/i }).click()
+    await expect(page.getByLabel("City")).toHaveValue("Kyoto")
+    await expect(page.getByLabel("Country")).toHaveValue("Japan")
+
+    await page.getByRole("button", { name: /Paris/i }).click()
+    await expect(page.getByLabel("City")).toHaveValue("Paris")
+    await expect(page.getByLabel("Country")).toHaveValue("France")
   })
 
   test("applies export preset dimensions", async ({ page }) => {
@@ -85,11 +100,12 @@ test.describe("Map Poster Studio", () => {
     await expect(page.getByLabel("Height (in)")).toHaveValue("3.6")
   })
 
-  test("shows place lookup hint after Hong Kong Island geocode", async ({ page }) => {
+  test("shows place lookup hint after user edits away from SAR default", async ({ page }) => {
     await mockGeocodeApi(page)
     await page.goto("/")
 
-    await page.getByLabel("City").fill("Hong Kong Island")
+    // Default is already Hong Kong SAR + centerLocked; edit the city so lookup runs.
+    await page.getByLabel("City").fill("Kowloon")
     await page.getByLabel("Country").fill("Hong Kong")
 
     await expect(

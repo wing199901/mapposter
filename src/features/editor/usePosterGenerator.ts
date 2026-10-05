@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type RefObject } from "react"
 
+import { DEFAULT_CONFIG } from "@/features/editor/defaultPosterConfig"
 import {
   exportAllThemesZip,
   exportPosterPng,
@@ -8,7 +9,6 @@ import {
 import type { MapPosterHandle } from "@/features/tiles/mapPosterRef"
 import { loadTheme } from "@/features/themes/themeRegistry"
 import type { ExportProgress, PosterConfig } from "@/lib/types"
-import { DEFAULT_LAYER_VISIBILITY } from "@/lib/types"
 import {
   loadPosterState,
   posterPixelSize,
@@ -16,19 +16,6 @@ import {
   savePosterState,
   writeStateToLocation,
 } from "@/lib/urlState"
-
-const DEFAULT_CONFIG: PosterConfig = {
-  geocode: { city: "Paris", country: "France" },
-  viewport: { latitude: 48.8566, longitude: 2.3522, radiusMeters: 10000 },
-  themeId: "terracotta",
-  display: { city: "Paris", country: "France" },
-  fontFamily: "Roboto",
-  centerLocked: false,
-  widthInches: 12,
-  heightInches: 16,
-  layerVisibility: DEFAULT_LAYER_VISIBILITY,
-  boundaryMaskEnabled: false,
-}
 
 function initialConfig(): PosterConfig {
   return readStateFromLocation() ?? loadPosterState() ?? DEFAULT_CONFIG
