@@ -27,7 +27,7 @@ import {
   themeColorForLayer,
 } from "@/features/tiles/themePaint"
 import { mapFeatureLayerIds } from "@/features/tiles/themeToMapStyle"
-import { LATIN_TRACKING_EM } from "@/lib/scriptDetection"
+import { latinTrackingLetterSpacing } from "@/lib/scriptDetection"
 
 export interface PosterLayout {
   widthPx: number
@@ -109,7 +109,8 @@ function geometryToPaths(map: Map, geometry: Geometry): string[] {
   return []
 }
 
-function drawPosterTypography(
+/** Canvas PNG fallback when font inlining fails — same lettering model + Latin tracking as Preview/SVG. */
+export function drawPosterTypography(
   ctx: CanvasRenderingContext2D,
   layout: PosterLayout,
   theme: PosterTheme,
@@ -122,7 +123,14 @@ function drawPosterTypography(
   ctx.textAlign = "center"
   ctx.textBaseline = "alphabetic"
 
-  drawFittedPairLine(ctx, lettering.city, lettering.fontStack, widthPx / 2, y(lettering.fromBottom.city))
+  drawFittedPairLine(
+    ctx,
+    lettering.city,
+    lettering.fontStack,
+    widthPx / 2,
+    y(lettering.fromBottom.city),
+    lettering.cityApplyLatinTracking,
+  )
 
   ctx.strokeStyle = theme.text
   ctx.globalAlpha = 0.8
@@ -139,8 +147,10 @@ function drawPosterTypography(
     lettering.fontStack,
     widthPx / 2,
     y(lettering.fromBottom.country),
+    lettering.countryApplyLatinTracking,
   )
 
+  ctx.letterSpacing = "0px"
   ctx.font = `400 ${lettering.fonts.coordinates}px ${lettering.fontStack}`
   ctx.globalAlpha = 0.8
   ctx.fillText(lettering.coordinates, widthPx / 2, y(lettering.fromBottom.coordinates))
@@ -157,20 +167,26 @@ function drawPosterTypography(
   ctx.globalAlpha = 1
 }
 
-function drawFittedPairLine(
+export function drawFittedPairLine(
   ctx: CanvasRenderingContext2D,
   fitted: FittedPairLineTypography,
   fontStack: string,
   centerX: number,
   baselineY: number,
+  applyLatinTracking = false,
 ): void {
+  ctx.letterSpacing = latinTrackingLetterSpacing(applyLatinTracking)
+
   if (!fitted.latin) {
     ctx.textAlign = "center"
     ctx.font = `${fitted.localWeight} ${fitted.fontSize}px ${fontStack}`
     ctx.fillText(fitted.local, centerX, baselineY)
+    ctx.letterSpacing = "0px"
     return
   }
 
+  // Pair lines never apply Latin-only tracking (spaces already in the latin string).
+  ctx.letterSpacing = "0px"
   ctx.font = `${fitted.localWeight} ${fitted.fontSize}px ${fontStack}`
   const localWidth = ctx.measureText(fitted.local).width
   ctx.font = `${fitted.latinWeight} ${fitted.fontSize}px ${fontStack}`
@@ -295,7 +311,7 @@ function pairText(fitted: FittedPairLineTypography): string {
 }
 
 function latinTrackingAttr(apply: boolean): string {
-  return apply ? ` letter-spacing="${LATIN_TRACKING_EM}em"` : ""
+  return apply ? ` letter-spacing="${latinTrackingLetterSpacing(true)}"` : ""
 }
 
 function typographySvg(layout: PosterLayout, theme: PosterTheme, lettering: PosterLettering): string {

@@ -17,9 +17,15 @@ const LATIN_LABEL_WORD_GAP = "\u2003"
 
 /**
  * Extra letter-spacing for Latin-only place/country lines (matches Tailwind `tracking-wide`).
- * Applied in Preview CSS and SVG `letter-spacing` when `*ApplyLatinTracking` is set.
+ * Applied in Preview CSS, SVG `letter-spacing`, and canvas PNG fallback when
+ * `*ApplyLatinTracking` is set.
  */
 export const LATIN_TRACKING_EM = 0.025
+
+/** CSS / canvas letter-spacing value for Latin-only tracking (or none). */
+export function latinTrackingLetterSpacing(apply: boolean): string {
+  return apply ? `${LATIN_TRACKING_EM}em` : "0px"
+}
 
 function letterSpaceWord(word: string): string {
   return [...word.toUpperCase()].join(" ")

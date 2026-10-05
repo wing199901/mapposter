@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildPosterSvg, posterLayoutFromInches } from "@/features/export/svgExport"
+import { buildPosterSvg, drawPosterTypography, posterLayoutFromInches } from "@/features/export/svgExport"
 import { buildPosterLettering } from "@/features/tiles/posterLettering"
 import {
   BUILDINGS_FILL_OPACITY,
@@ -10,7 +10,7 @@ import {
   exportStrokeWidthForLayer,
   themeColorForLayer,
 } from "@/features/tiles/themePaint"
-import { LATIN_TRACKING_EM } from "@/lib/scriptDetection"
+import { LATIN_TRACKING_EM, latinTrackingLetterSpacing } from "@/lib/scriptDetection"
 import type { DisplayLabels, PosterLayerVisibility, PosterTheme } from "@/lib/types"
 import { DEFAULT_LAYER_VISIBILITY, DPI } from "@/lib/types"
 
@@ -241,9 +241,95 @@ describe("buildPosterSvg Map stub fixtures", () => {
       { layerVisibility: visibility() },
       lettering,
     )
-    expect(svg).toContain(`letter-spacing="${LATIN_TRACKING_EM}em"`)
+    expect(svg).toContain(`letter-spacing="${latinTrackingLetterSpacing(true)}"`)
     expect(svg).toContain("P A R I S")
     expect(svg).toContain("F R A N C E")
+  })
+
+  it("applies canvas letterSpacing on Latin-only city/country in PNG fallback", () => {
+    const lettering = buildPosterLettering({
+      widthPx: layout.widthPx,
+      heightPx: layout.heightPx,
+      display: parisDisplay,
+      fontFamily: "Roboto",
+      viewport,
+      measure: () => 40,
+    })
+    expect(lettering.cityApplyLatinTracking).toBe(true)
+    expect(lettering.countryApplyLatinTracking).toBe(true)
+
+    const letterSpacingLog: string[] = []
+    let currentLetterSpacing = "0px"
+    const ctx = {
+      fillStyle: "",
+      strokeStyle: "",
+      font: "",
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "alphabetic" as CanvasTextBaseline,
+      globalAlpha: 1,
+      lineWidth: 1,
+      fillText: () => undefined,
+      measureText: () => ({ width: 40 }),
+      beginPath: () => undefined,
+      moveTo: () => undefined,
+      lineTo: () => undefined,
+      stroke: () => undefined,
+    } as unknown as CanvasRenderingContext2D
+    Object.defineProperty(ctx, "letterSpacing", {
+      get: () => currentLetterSpacing,
+      set: (value: string) => {
+        currentLetterSpacing = value
+        letterSpacingLog.push(value)
+      },
+      configurable: true,
+    })
+
+    drawPosterTypography(ctx, layout, theme, lettering)
+
+    expect(letterSpacingLog).toContain(latinTrackingLetterSpacing(true))
+    expect(letterSpacingLog.filter((v) => v === latinTrackingLetterSpacing(true)).length).toBeGreaterThanOrEqual(2)
+    expect(letterSpacingLog.at(-1)).toBe("0px")
+    expect(LATIN_TRACKING_EM).toBe(0.025)
+  })
+
+  it("does not apply canvas Latin tracking on CJK display pairs", () => {
+    const lettering = buildPosterLettering({
+      widthPx: layout.widthPx,
+      heightPx: layout.heightPx,
+      display: hkDisplay,
+      fontFamily: "Roboto",
+      viewport,
+      measure: () => 40,
+    })
+    const letterSpacingLog: string[] = []
+    let currentLetterSpacing = "0px"
+    const ctx = {
+      fillStyle: "",
+      strokeStyle: "",
+      font: "",
+      textAlign: "center" as CanvasTextAlign,
+      textBaseline: "alphabetic" as CanvasTextBaseline,
+      globalAlpha: 1,
+      lineWidth: 1,
+      fillText: () => undefined,
+      measureText: () => ({ width: 40 }),
+      beginPath: () => undefined,
+      moveTo: () => undefined,
+      lineTo: () => undefined,
+      stroke: () => undefined,
+    } as unknown as CanvasRenderingContext2D
+    Object.defineProperty(ctx, "letterSpacing", {
+      get: () => currentLetterSpacing,
+      set: (value: string) => {
+        currentLetterSpacing = value
+        letterSpacingLog.push(value)
+      },
+      configurable: true,
+    })
+
+    drawPosterTypography(ctx, layout, theme, lettering)
+
+    expect(letterSpacingLog).not.toContain(latinTrackingLetterSpacing(true))
   })
 
   it("draws a solid boundary mask when enabled", () => {

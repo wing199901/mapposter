@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import { loadTheme } from "@/features/themes/themeRegistry"
 import {
+  BUILDINGS_FILL_OPACITY,
+  LAYER_STROKE,
+  type StrokeLayerId,
+} from "@/features/tiles/themePaint"
+import {
   DEFAULT_LAYER_VISIBILITY,
   type PosterLayerVisibility,
 } from "@/lib/types"
@@ -87,49 +92,53 @@ describe("layer visibility map style", () => {
 
   it("interpolates road line-width stops from the Poster stroke preview bases", () => {
     const theme = loadTheme("terracotta")
-    const style = themeToMapStyle(theme)
-    const residential = style.layers.find((layer) => layer.id === "road-residential")
-    expect(residential?.type).toBe("line")
-    if (residential?.type !== "line") {
-      return
-    }
-    const lineWidth = residential.paint?.["line-width"]
-    expect(Array.isArray(lineWidth)).toBe(true)
-    // ["interpolate", ["linear"], ["zoom"], 10, w*0.4, 13, w*0.8, 16, w*1.4]
-    expect(lineWidth).toEqual([
-      "interpolate",
-      ["linear"],
-      ["zoom"],
-      10,
-      0.6 * 0.4,
-      13,
-      0.6 * 0.8,
-      16,
-      0.6 * 1.4,
-    ])
+    const style = themeToMapStyle(theme, {
+      layerVisibility: visibility({ buildings: true, shipRoutes: true, rail: true }),
+    })
 
-    const motorway = style.layers.find((layer) => layer.id === "road-motorway")
-    expect(motorway?.type).toBe("line")
-    if (motorway?.type === "line") {
-      expect(motorway.paint?.["line-width"]).toEqual([
+    const roadIds = (
+      Object.keys(LAYER_STROKE) as StrokeLayerId[]
+    ).filter((id) => id !== "waterway")
+
+    for (const layerId of roadIds) {
+      const layer = style.layers.find((candidate) => candidate.id === layerId)
+      expect(layer?.type).toBe("line")
+      if (layer?.type !== "line") {
+        continue
+      }
+      const base = LAYER_STROKE[layerId].previewBase
+      expect(layer.paint?.["line-width"]).toEqual([
         "interpolate",
         ["linear"],
         ["zoom"],
         10,
-        2.8 * 0.4,
+        base * 0.4,
         13,
-        2.8 * 0.8,
+        base * 0.8,
         16,
-        2.8 * 1.4,
+        base * 1.4,
       ])
     }
 
-    const buildings = themeToMapStyle(theme, {
-      layerVisibility: visibility({ buildings: true }),
-    }).layers.find((layer) => layer.id === "buildings")
+    const waterway = style.layers.find((layer) => layer.id === "waterway")
+    expect(waterway?.type).toBe("line")
+    if (waterway?.type === "line") {
+      const base = LAYER_STROKE.waterway.previewBase
+      expect(waterway.paint?.["line-width"]).toEqual([
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        base,
+        14,
+        base * 1.25,
+      ])
+    }
+
+    const buildings = style.layers.find((layer) => layer.id === "buildings")
     expect(buildings?.type).toBe("fill")
     if (buildings?.type === "fill") {
-      expect(buildings.paint?.["fill-opacity"]).toBe(0.85)
+      expect(buildings.paint?.["fill-opacity"]).toBe(BUILDINGS_FILL_OPACITY)
     }
   })
 })

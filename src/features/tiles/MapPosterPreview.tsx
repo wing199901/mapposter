@@ -11,6 +11,7 @@ import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
 import { BoundaryBlurOverlay } from "@/features/boundary/BoundaryBlurOverlay"
+import { latinTrackingLetterSpacing } from "@/lib/scriptDetection"
 import type { PosterConfig, PosterTheme } from "@/lib/types"
 
 import type { MapPosterHandle } from "./mapPosterRef"
@@ -299,15 +300,14 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             style={{ background: posterBottomVignetteCss(fadeBottomStart) }}
           />
           <p
-            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap ${
-              lettering.cityApplyLatinTracking ? "tracking-wide" : ""
-            }`}
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap"
             style={{
               bottom: `${fromBottom.city * 100}%`,
               color: theme.text,
               fontSize: cityFontSize,
               fontFamily: fontStack,
               fontWeight: cityLocalWeight,
+              letterSpacing: latinTrackingLetterSpacing(lettering.cityApplyLatinTracking),
             }}
           >
             {lettering.city.local}
@@ -333,15 +333,14 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             }}
           />
           <p
-            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap ${
-              lettering.countryApplyLatinTracking ? "tracking-wide" : ""
-            }`}
+            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap"
             style={{
               bottom: `${fromBottom.country * 100}%`,
               color: theme.text,
               fontSize: countryFontSize,
               fontFamily: fontStack,
               fontWeight: countryLocalWeight,
+              letterSpacing: latinTrackingLetterSpacing(lettering.countryApplyLatinTracking),
             }}
           >
             {lettering.country.local}
