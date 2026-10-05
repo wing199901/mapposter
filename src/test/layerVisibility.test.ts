@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import { loadTheme } from "@/features/themes/themeRegistry"
 import {
+  BUILDINGS_FILL_OPACITY,
+  LAYER_STROKE,
+  type StrokeLayerId,
+} from "@/features/tiles/themePaint"
+import {
   DEFAULT_LAYER_VISIBILITY,
   type PosterLayerVisibility,
 } from "@/lib/types"
@@ -83,5 +88,57 @@ describe("layer visibility map style", () => {
     expect(filterJson).toContain('"tunnel"')
     expect(filterJson).toContain("motorway")
     expect(style.layers.some((layer) => layer.id === "road-bridge-deck")).toBe(true)
+  })
+
+  it("interpolates road line-width stops from the Poster stroke preview bases", () => {
+    const theme = loadTheme("terracotta")
+    const style = themeToMapStyle(theme, {
+      layerVisibility: visibility({ buildings: true, shipRoutes: true, rail: true }),
+    })
+
+    const roadIds = (
+      Object.keys(LAYER_STROKE) as StrokeLayerId[]
+    ).filter((id) => id !== "waterway")
+
+    for (const layerId of roadIds) {
+      const layer = style.layers.find((candidate) => candidate.id === layerId)
+      expect(layer?.type).toBe("line")
+      if (layer?.type !== "line") {
+        continue
+      }
+      const base = LAYER_STROKE[layerId].previewBase
+      expect(layer.paint?.["line-width"]).toEqual([
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        base * 0.4,
+        13,
+        base * 0.8,
+        16,
+        base * 1.4,
+      ])
+    }
+
+    const waterway = style.layers.find((layer) => layer.id === "waterway")
+    expect(waterway?.type).toBe("line")
+    if (waterway?.type === "line") {
+      const base = LAYER_STROKE.waterway.previewBase
+      expect(waterway.paint?.["line-width"]).toEqual([
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        base,
+        14,
+        base * 1.25,
+      ])
+    }
+
+    const buildings = style.layers.find((layer) => layer.id === "buildings")
+    expect(buildings?.type).toBe("fill")
+    if (buildings?.type === "fill") {
+      expect(buildings.paint?.["fill-opacity"]).toBe(BUILDINGS_FILL_OPACITY)
+    }
   })
 })

@@ -4,6 +4,8 @@ The Poster is drawn once as SVG. The PNG is that drawing rasterized at 300 DPI. 
 
 The map is resized to the export pixel size before the SVG is traced, up to the existing 6000px cap, so the SVG and the PNG share one geometry. If that resize cannot be done, the Export job fails and writes neither file. The downloaded SVG keeps typeface names only. The copy that is rasterized inlines the single family already chosen for the poster, subset to the characters on that poster, because an SVG loaded as an image cannot see the page's stylesheets. If that subset cannot be inlined, the PNG is the SVG map with its text omitted, and Display labels are drawn with canvas from the same fitted layout. The downloaded SVG is unchanged.
 
+Closable Preview↔Poster paint/typography deltas (shared stroke weight table, SVG cap/join aligned to MapLibre, buildings opacity, Latin tracking, coordinates opacity) are closed in product code. Intentional gaps remain: GL antialiasing, and Preview road width still zoom-interpolates while the Poster uses fixed stroke weights.
+
 ## Status
 
 Accepted

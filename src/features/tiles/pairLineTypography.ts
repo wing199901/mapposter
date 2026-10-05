@@ -57,7 +57,8 @@ function baseGapPx(role: PairLineRole, baseFontSize: number): number {
   if (role === "city") {
     return Math.max(8, Math.round(baseFontSize * 0.2))
   }
-  return Math.max(6, Math.round(baseFontSize * 0.18))
+  // Country pair gap slightly tighter than place — secondary hierarchy.
+  return Math.max(6, Math.round(baseFontSize * 0.15))
 }
 
 export function pairLineMaxWidthPx(posterWidthPx: number): number {
