@@ -333,7 +333,9 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
             }}
           />
           <p
-            className="pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap"
+            className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 whitespace-nowrap ${
+              lettering.countryApplyLatinTracking ? "tracking-wide" : ""
+            }`}
             style={{
               bottom: `${fromBottom.country * 100}%`,
               color: theme.text,
@@ -362,6 +364,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
               bottom: `${fromBottom.coordinates * 100}%`,
               color: theme.text,
               fontSize: lettering.fonts.coordinates,
+              fontFamily: fontStack,
             }}
           >
             {lettering.coordinates}
@@ -373,6 +376,7 @@ export const MapPosterPreview = forwardRef<MapPosterHandle, MapPosterPreviewProp
               bottom: `${fromBottom.attribution * 100}%`,
               color: theme.text,
               fontSize: lettering.fonts.attribution,
+              fontFamily: fontStack,
               lineHeight: 1,
             }}
           >

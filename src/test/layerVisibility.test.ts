@@ -84,4 +84,52 @@ describe("layer visibility map style", () => {
     expect(filterJson).toContain("motorway")
     expect(style.layers.some((layer) => layer.id === "road-bridge-deck")).toBe(true)
   })
+
+  it("interpolates road line-width stops from the Poster stroke preview bases", () => {
+    const theme = loadTheme("terracotta")
+    const style = themeToMapStyle(theme)
+    const residential = style.layers.find((layer) => layer.id === "road-residential")
+    expect(residential?.type).toBe("line")
+    if (residential?.type !== "line") {
+      return
+    }
+    const lineWidth = residential.paint?.["line-width"]
+    expect(Array.isArray(lineWidth)).toBe(true)
+    // ["interpolate", ["linear"], ["zoom"], 10, w*0.4, 13, w*0.8, 16, w*1.4]
+    expect(lineWidth).toEqual([
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      10,
+      0.6 * 0.4,
+      13,
+      0.6 * 0.8,
+      16,
+      0.6 * 1.4,
+    ])
+
+    const motorway = style.layers.find((layer) => layer.id === "road-motorway")
+    expect(motorway?.type).toBe("line")
+    if (motorway?.type === "line") {
+      expect(motorway.paint?.["line-width"]).toEqual([
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        2.8 * 0.4,
+        13,
+        2.8 * 0.8,
+        16,
+        2.8 * 1.4,
+      ])
+    }
+
+    const buildings = themeToMapStyle(theme, {
+      layerVisibility: visibility({ buildings: true }),
+    }).layers.find((layer) => layer.id === "buildings")
+    expect(buildings?.type).toBe("fill")
+    if (buildings?.type === "fill") {
+      expect(buildings.paint?.["fill-opacity"]).toBe(0.85)
+    }
+  })
 })

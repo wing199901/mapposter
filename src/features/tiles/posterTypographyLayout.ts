@@ -40,7 +40,8 @@ export function posterTypographyLayout(widthPx: number, heightPx: number): Poste
 
   const fonts: PosterFontSizes = {
     city: Math.max(14, Math.round(scaleBase * 0.055)),
-    country: Math.max(11, Math.round(scaleBase * 0.028)),
+    // Country ~45% of city scale — clearly secondary without opacity.
+    country: Math.max(10, Math.round(scaleBase * 0.025)),
     coordinates: Math.max(10, Math.round(scaleBase * 0.018)),
     attribution: Math.max(5, Math.round(scaleBase * 0.005)),
   }
@@ -49,9 +50,9 @@ export function posterTypographyLayout(widthPx: number, heightPx: number): Poste
   const attributionPx = safeHeight * 0.02
   const coordinatesPx =
     attributionPx + fonts.attribution * 1.4 + scaleBase * 0.012
-  const countryPx = coordinatesPx + fonts.coordinates * 1.15 + scaleBase * 0.012
-  const linePx = countryPx + fonts.country * 1.05 + scaleBase * 0.008
-  const cityPx = linePx + scaleBase * 0.006 + 2
+  const countryPx = coordinatesPx + fonts.coordinates * 1.15 + scaleBase * 0.014
+  const linePx = countryPx + fonts.country * 1.05 + scaleBase * 0.01
+  const cityPx = linePx + scaleBase * 0.008 + 2
 
   const fromBottom: PosterTextFromBottom = {
     attribution: attributionPx / safeHeight,

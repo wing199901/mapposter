@@ -57,4 +57,45 @@ describe("poster lettering", () => {
     expect(posterGlyphs(lettering)).toContain("K")
     expect(posterGlyphs(lettering)).not.toMatch(/(.)\1/)
   })
+
+  it("wires Latin-only country tracking flags for Preview and SVG", () => {
+    const lettering = buildPosterLettering({
+      widthPx: 1000,
+      heightPx: 1500,
+      display: { city: "Paris", country: "France" },
+      fontFamily: "Roboto",
+      viewport,
+      measure: () => 40,
+    })
+
+    expect(lettering.city.local).toBe("P A R I S")
+    expect(lettering.country.local).toBe("F R A N C E")
+    expect(lettering.cityApplyLatinTracking).toBe(true)
+    expect(lettering.countryApplyLatinTracking).toBe(true)
+  })
+
+  it("does not apply CSS tracking on CJK display pairs", () => {
+    const lettering = buildPosterLettering({
+      widthPx: 1000,
+      heightPx: 1500,
+      display: {
+        city: "香港",
+        cityLatin: "Hong Kong",
+        country: "中國",
+        countryLatin: "China",
+        hasPlaceLocalName: true,
+        scriptFamily: "hk",
+      },
+      fontFamily: "Roboto",
+      viewport,
+      measure: () => 40,
+    })
+
+    expect(lettering.cityApplyLatinTracking).toBe(false)
+    expect(lettering.countryApplyLatinTracking).toBe(false)
+    expect(lettering.city.fontSize).toBe(lettering.city.latinFontSize)
+    expect(lettering.country.fontSize).toBe(lettering.country.latinFontSize)
+    expect(lettering.country.localWeight).toBeLessThan(lettering.city.localWeight)
+    expect(lettering.country.latinWeight).toBeLessThan(lettering.country.localWeight)
+  })
 })

@@ -19,8 +19,15 @@ import {
   posterVignetteSvgDefs,
   posterVignetteSvgRects,
 } from "@/features/tiles/posterVignette"
-import { exportStrokeWidthForLayer, themeColorForLayer } from "@/features/tiles/themePaint"
+import {
+  BUILDINGS_FILL_OPACITY,
+  POSTER_STROKE_LINECAP,
+  POSTER_STROKE_LINEJOIN,
+  exportStrokeWidthForLayer,
+  themeColorForLayer,
+} from "@/features/tiles/themePaint"
 import { mapFeatureLayerIds } from "@/features/tiles/themeToMapStyle"
+import { LATIN_TRACKING_EM } from "@/lib/scriptDetection"
 
 export interface PosterLayout {
   widthPx: number
@@ -287,16 +294,20 @@ function pairText(fitted: FittedPairLineTypography): string {
   return `${local}<tspan dx="${fitted.gapPx}" font-size="${fitted.fontSize}" font-weight="${fitted.latinWeight}">${escapeXml(fitted.latin)}</tspan>`
 }
 
+function latinTrackingAttr(apply: boolean): string {
+  return apply ? ` letter-spacing="${LATIN_TRACKING_EM}em"` : ""
+}
+
 function typographySvg(layout: PosterLayout, theme: PosterTheme, lettering: PosterLettering): string {
   const { widthPx, heightPx } = layout
   const y = (fromBottomFraction: number) => heightPx * (1 - fromBottomFraction)
   const fontStack = escapeXml(lettering.fontStack)
 
   return `
-    <text x="${widthPx / 2}" y="${y(lettering.fromBottom.city)}" fill="${theme.text}" font-family="${fontStack}" font-size="${lettering.city.fontSize}" font-weight="${lettering.city.localWeight}" text-anchor="middle" dominant-baseline="alphabetic">${pairText(lettering.city)}</text>
+    <text x="${widthPx / 2}" y="${y(lettering.fromBottom.city)}" fill="${theme.text}" font-family="${fontStack}" font-size="${lettering.city.fontSize}" font-weight="${lettering.city.localWeight}" text-anchor="middle" dominant-baseline="alphabetic"${latinTrackingAttr(lettering.cityApplyLatinTracking)}>${pairText(lettering.city)}</text>
     <line x1="${lettering.rule.x1}" y1="${y(lettering.fromBottom.line)}" x2="${lettering.rule.x2}" y2="${y(lettering.fromBottom.line)}" stroke="${theme.text}" stroke-width="${lettering.lineWidth}" stroke-opacity="0.8" />
-    <text x="${widthPx / 2}" y="${y(lettering.fromBottom.country)}" fill="${theme.text}" font-family="${fontStack}" font-size="${lettering.country.fontSize}" font-weight="${lettering.country.localWeight}" text-anchor="middle" dominant-baseline="alphabetic">${pairText(lettering.country)}</text>
-    <text x="${widthPx / 2}" y="${y(lettering.fromBottom.coordinates)}" fill="${theme.text}" font-family="${fontStack}" font-size="${lettering.fonts.coordinates}" font-weight="400" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lettering.coordinates)}</text>
+    <text x="${widthPx / 2}" y="${y(lettering.fromBottom.country)}" fill="${theme.text}" font-family="${fontStack}" font-size="${lettering.country.fontSize}" font-weight="${lettering.country.localWeight}" text-anchor="middle" dominant-baseline="alphabetic"${latinTrackingAttr(lettering.countryApplyLatinTracking)}>${pairText(lettering.country)}</text>
+    <text x="${widthPx / 2}" y="${y(lettering.fromBottom.coordinates)}" fill="${theme.text}" fill-opacity="0.8" font-family="${fontStack}" font-size="${lettering.fonts.coordinates}" font-weight="400" text-anchor="middle" dominant-baseline="alphabetic">${escapeXml(lettering.coordinates)}</text>
     <text x="${widthPx * (1 - POSTER_ATTRIBUTION_FROM_RIGHT)}" y="${y(lettering.fromBottom.attribution)}" fill="${theme.text}" fill-opacity="0.5" font-family="${fontStack}" font-size="${lettering.fonts.attribution}" font-weight="400" text-anchor="end" dominant-baseline="alphabetic">${escapeXml(lettering.attribution)}</text>
   `
 }
@@ -335,9 +346,11 @@ export function buildPosterSvg(
     }
     const isLine = layerId.startsWith("road") || layerId === "waterway"
     const strokeWidth = exportStrokeWidthForLayer(layerId)
+    const fillOpacity =
+      layerId === "buildings" ? ` fill-opacity="${BUILDINGS_FILL_OPACITY}"` : ""
     const paint = isLine
-      ? `fill="none" stroke="${themeColorForLayer(theme, layerId)}" stroke-width="${(strokeWidth / scaleX).toFixed(3)}" stroke-linecap="round" stroke-linejoin="round"`
-      : `fill="${themeColorForLayer(theme, layerId)}" stroke="none"`
+      ? `fill="none" stroke="${themeColorForLayer(theme, layerId)}" stroke-width="${(strokeWidth / scaleX).toFixed(3)}" stroke-linecap="${POSTER_STROKE_LINECAP}" stroke-linejoin="${POSTER_STROKE_LINEJOIN}"`
+      : `fill="${themeColorForLayer(theme, layerId)}"${fillOpacity} stroke="none"`
     groups.push(
       `<g id="${layerId}" transform="scale(${scaleX} ${scaleY})">${paths.map((path) => `<path d="${path}" ${paint} />`).join("")}</g>`,
     )

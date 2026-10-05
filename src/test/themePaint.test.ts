@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  BUILDINGS_FILL_OPACITY,
+  DEFAULT_POSTER_STROKE_WEIGHT,
+  LAYER_STROKE,
   exportStrokeWidthForLayer,
+  previewStrokeBaseForLayer,
   themeColorForLayer,
 } from "@/features/tiles/themePaint"
 import type { PosterTheme } from "@/lib/types"
@@ -40,10 +44,15 @@ describe("theme paint", () => {
     expect(themeColorForLayer(theme, "road-rail")).toBe("#ffffff")
   })
 
-  it("keeps SVG stroke widths constant per map-layer id", () => {
-    expect(exportStrokeWidthForLayer("road-motorway")).toBe(4)
-    expect(exportStrokeWidthForLayer("road-primary")).toBe(3)
-    expect(exportStrokeWidthForLayer("road-residential")).toBe(1)
-    expect(exportStrokeWidthForLayer("waterway")).toBe(1.2)
+  it("keeps SVG stroke widths on the unified Poster stroke table", () => {
+    for (const [layerId, weights] of Object.entries(LAYER_STROKE)) {
+      expect(exportStrokeWidthForLayer(layerId)).toBe(weights.poster)
+      expect(previewStrokeBaseForLayer(layerId)).toBe(weights.previewBase)
+    }
+    expect(exportStrokeWidthForLayer("unknown-layer")).toBe(DEFAULT_POSTER_STROKE_WEIGHT)
+  })
+
+  it("shares buildings fill opacity for Preview and Poster", () => {
+    expect(BUILDINGS_FILL_OPACITY).toBe(0.85)
   })
 })

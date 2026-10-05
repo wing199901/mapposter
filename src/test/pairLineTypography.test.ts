@@ -92,4 +92,27 @@ describe("pairLineTypography", () => {
     expect(span.x1).toBe(335)
     expect(span.x2).toBe(665)
   })
+
+  it("keeps country pair gaps at or above the floor and tighter than place", () => {
+    const measure = () => 10
+    const city = fitPairLineTypography({
+      role: "city",
+      baseFontSize: 40,
+      local: "香港",
+      latin: "HONG KONG",
+      maxWidthPx: 2000,
+      measure,
+    })
+    const country = fitPairLineTypography({
+      role: "country",
+      baseFontSize: 20,
+      local: "中國",
+      latin: "CHINA",
+      maxWidthPx: 2000,
+      measure,
+    })
+    expect(city.gapPx).toBeGreaterThanOrEqual(8)
+    expect(country.gapPx).toBeGreaterThanOrEqual(6)
+    expect(country.gapPx).toBeLessThanOrEqual(city.gapPx)
+  })
 })

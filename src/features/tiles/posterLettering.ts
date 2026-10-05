@@ -28,6 +28,7 @@ export interface PosterLettering {
   fadeBottomStart: number
   fontStack: string
   cityApplyLatinTracking: boolean
+  countryApplyLatinTracking: boolean
 }
 
 export function primaryFontFamily(fontStack: string): string {
@@ -88,5 +89,6 @@ export function buildPosterLettering(options: {
     fadeBottomStart: layout.fadeBottomStart,
     fontStack,
     cityApplyLatinTracking: !lines.city.latin && lines.city.applyLatinTracking,
+    countryApplyLatinTracking: !lines.country.latin && lines.country.applyLatinTracking,
   }
 }
