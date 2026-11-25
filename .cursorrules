@@ -109,13 +109,13 @@ When changing proxy behaviour, update the shared handler in `shared/proxyHandler
 
 Follow `docs/design-direction.md`:
 
-- **Layout**: Two-column desktop shell — location + style controls (left ~1/2), preview (right ~1/2). Export (size + downloads) lives in a Preview header popover. `max-w-[1600px]` container.
+- **Layout**: Desktop two-column shell — Location + Style controls (left ~1/2) permanently visible, Preview (right ~1/2). Export lives in a Preview header popover; Share stays a compact header action. `max-w-[1600px]` container.
 - **Tokens**: shadcn semantic tokens in `src/index.css` (`--background`, `--primary`, etc.). Use Tailwind utility classes; avoid hardcoded hex in editor chrome (poster themes are separate).
 - **Components**: Extend `src/components/ui/` (Button, Card, Input, Slider, Tabs, Badge, Spinner, …). Match existing `cva` + `cn()` patterns from `src/lib/utils.ts`.
 - **Icons**: `lucide-react`. Use `data-icon="inline-start"` on icons inside buttons (existing convention).
 - **Toasts**: `sonner` via `<Toaster richColors position="top-center" />`.
 - **Dark mode**: CSS variables support `.dark`, but the app does not expose a theme toggle yet — do not add system dark-mode switching unless requested.
-- **Mobile**: Stacked layout is a future enhancement; do not break desktop three-column grid when adding responsive behaviour.
+- **Narrow viewports**: Map-first — poster dominates; Location + Style open from a header Menu bottom Sheet. Do not break the desktop two-column grid.
 
 ## 🧪 Testing
 

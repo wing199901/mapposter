@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 const mockGeocode = {
   latitude: 22.2644,
@@ -29,7 +29,7 @@ const mockBoundary = {
   },
 }
 
-async function mockGeocodeApi(page: import("@playwright/test").Page) {
+async function mockGeocodeApi(page: Page) {
   await page.route("**/api/geocode**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -39,7 +39,7 @@ async function mockGeocodeApi(page: import("@playwright/test").Page) {
   })
 }
 
-async function mockBoundaryApi(page: import("@playwright/test").Page) {
+async function mockBoundaryApi(page: Page) {
   await page.route("**/api/boundary**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -56,14 +56,23 @@ function encodeShareHash(payload: Record<string, unknown>): string {
   ).toString("base64")
 }
 
+async function openMobileMenu(page: Page) {
+  await page.getByRole("button", { name: "Menu" }).click()
+  await expect(page.getByRole("heading", { name: "Location & style" })).toBeVisible()
+}
+
 test.describe("Map Poster Studio", () => {
-  test("loads editor shell with live preview", async ({ page }) => {
+  test("loads desktop two-column shell with live preview", async ({ page }) => {
     await page.goto("/")
     await expect(page.getByRole("heading", { name: "Map Poster Studio" })).toBeVisible()
     await expect(page.getByText(/Bilingual map posters with regional CJK lettering/i)).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Style", exact: true })).toBeVisible()
     await expect(page.getByRole("button", { name: /Hong Kong/i }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0)
     await expect(page.getByText("Drag to pan and scroll to zoom")).toBeVisible()
+    await expect(page.getByText("About radius")).toBeVisible()
   })
 
   test("switches theme and updates share link hash", async ({ page }) => {
@@ -200,6 +209,22 @@ test.describe("Map Poster Studio", () => {
     expect(geocodeCalls).toBe(0)
     await expect(page.getByText("Looking up place size…")).toHaveCount(0)
     await expect(page.getByText(/Suggested map radius \d+ m from place size/i)).toHaveCount(0)
+  })
+
+  test("opens location sheet from Menu on a phone-sized viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto("/")
+
+    await expect(page.getByRole("button", { name: "Menu" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
+    await expect(page.getByText("Preview", { exact: true })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toHaveCount(0)
+
+    await openMobileMenu(page)
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Style", exact: true })).toBeVisible()
+    await expect(page.getByLabel("City")).toBeVisible()
+    await expect(page.getByText("About radius")).toBeVisible()
   })
 
   test("looks up place after the user edits city on a restored share link", async ({ page }) => {

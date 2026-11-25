@@ -1,8 +1,8 @@
-/** Default max preview width when the panel width is not yet measured. */
-export const PREVIEW_MAX_WIDTH_PX = 520
+/** Default max preview width when the stage width is not yet measured. */
+export const PREVIEW_MAX_WIDTH_PX = 720
 
 /** Safety cap so ultra-tall presets do not overflow small viewports. */
-export const PREVIEW_MAX_HEIGHT_PX = 640
+export const PREVIEW_MAX_HEIGHT_PX = 900
 
 /**
  * Size the preview from export inches, scaling to fit available width.

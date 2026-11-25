@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { clampInches, EXPORT_PRESETS } from "@/features/export/presets"
+import { cn } from "@/lib/utils"
 import { MAX_INCHES, type PosterConfig } from "@/lib/types"
 
 interface ExportPopoverProps {
@@ -16,6 +17,8 @@ interface ExportPopoverProps {
   exportCurrentPng: () => Promise<void>
   exportCurrentSvg: () => Promise<void>
   exportAllThemes: () => Promise<void>
+  /** Larger hit target for narrow / touch layouts. */
+  touchFriendly?: boolean
 }
 
 export function ExportPopover({
@@ -26,6 +29,7 @@ export function ExportPopover({
   exportCurrentPng,
   exportCurrentSvg,
   exportAllThemes,
+  touchFriendly = false,
 }: ExportPopoverProps) {
   const [open, setOpen] = useState(false)
   const canDownload = mapReady && !isBusy
@@ -42,12 +46,17 @@ export function ExportPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" type="button">
+        <Button
+          variant="outline"
+          type="button"
+          size={touchFriendly ? "lg" : "default"}
+          className={cn(touchFriendly && "min-h-11 min-w-11 px-5")}
+        >
           <Download data-icon="inline-start" />
           Export
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end">
+      <PopoverContent align="end" className={cn(touchFriendly && "w-[min(100vw-1.5rem,22rem)]")}>
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">Size & download</p>
           {EXPORT_PRESETS.map((preset) => {
@@ -58,7 +67,7 @@ export function ExportPopover({
               <Button
                 key={preset.id}
                 variant={selected ? "default" : "outline"}
-                className="justify-between"
+                className={cn("justify-between", touchFriendly && "min-h-11")}
                 type="button"
                 onClick={() =>
                   setConfig((current) => ({
@@ -117,6 +126,7 @@ export function ExportPopover({
           </div>
           <Button
             type="button"
+            className={cn(touchFriendly && "min-h-11")}
             disabled={!canDownload}
             onClick={() => void runDownload(exportCurrentPng)}
           >
@@ -126,6 +136,7 @@ export function ExportPopover({
           <Button
             type="button"
             variant="secondary"
+            className={cn(touchFriendly && "min-h-11")}
             disabled={!canDownload}
             onClick={() => void runDownload(exportCurrentSvg)}
           >
@@ -134,6 +145,7 @@ export function ExportPopover({
           <Button
             type="button"
             variant="secondary"
+            className={cn(touchFriendly && "min-h-11")}
             disabled={!canDownload}
             onClick={() => void runDownload(exportAllThemes)}
           >
