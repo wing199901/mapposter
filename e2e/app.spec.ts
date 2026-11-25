@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 const mockGeocode = {
   latitude: 22.2644,
@@ -29,7 +29,7 @@ const mockBoundary = {
   },
 }
 
-async function mockGeocodeApi(page: import("@playwright/test").Page) {
+async function mockGeocodeApi(page: Page) {
   await page.route("**/api/geocode**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -39,7 +39,7 @@ async function mockGeocodeApi(page: import("@playwright/test").Page) {
   })
 }
 
-async function mockBoundaryApi(page: import("@playwright/test").Page) {
+async function mockBoundaryApi(page: Page) {
   await page.route("**/api/boundary**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -56,19 +56,29 @@ function encodeShareHash(payload: Record<string, unknown>): string {
   ).toString("base64")
 }
 
+async function openControlsMenu(page: Page) {
+  await page.getByRole("button", { name: "Menu" }).click()
+  await expect(page.getByRole("heading", { name: "Location & style" })).toBeVisible()
+}
+
 test.describe("Map Poster Studio", () => {
-  test("loads editor shell with live preview", async ({ page }) => {
+  test("loads map-first shell with menu-hidden controls", async ({ page }) => {
     await page.goto("/")
     await expect(page.getByRole("heading", { name: "Map Poster Studio" })).toBeVisible()
     await expect(page.getByText(/Bilingual map posters with regional CJK lettering/i)).toBeVisible()
-    await expect(page.getByRole("button", { name: /Hong Kong/i }).first()).toBeVisible()
+    await expect(page.getByRole("button", { name: "Menu" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
-    await expect(page.getByText("Drag to pan and scroll to zoom")).toBeVisible()
+    await expect(page.getByRole("button", { name: "Share" })).toBeVisible()
+    await expect(page.getByText("Preview")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: /Hong Kong/i })).toHaveCount(0)
+    await expect(page.getByText(/Open Menu to change location or style/i)).toBeVisible()
   })
 
   test("switches theme and updates share link hash", async ({ page }) => {
     await mockGeocodeApi(page)
     await page.goto("/")
+    await openControlsMenu(page)
 
     await page.getByRole("button", { name: "Terracotta" }).click()
     await expect(page.locator("button.border-primary", { hasText: "Terracotta" })).toBeVisible()
@@ -81,6 +91,7 @@ test.describe("Map Poster Studio", () => {
   test("applies Kyoto example and keeps Latin Paris available", async ({ page }) => {
     await mockGeocodeApi(page)
     await page.goto("/")
+    await openControlsMenu(page)
 
     await page.getByRole("button", { name: /Kyoto/i }).click()
     await expect(page.getByLabel("City")).toHaveValue("Kyoto")
@@ -103,6 +114,7 @@ test.describe("Map Poster Studio", () => {
   test("shows place lookup hint after user edits away from SAR default", async ({ page }) => {
     await mockGeocodeApi(page)
     await page.goto("/")
+    await openControlsMenu(page)
 
     // Default is already Hong Kong SAR + centerLocked; edit the city so lookup runs.
     await page.getByLabel("City").fill("Kowloon")
@@ -119,6 +131,7 @@ test.describe("Map Poster Studio", () => {
     await mockGeocodeApi(page)
     await mockBoundaryApi(page)
     await page.goto("/")
+    await openControlsMenu(page)
 
     await page.getByRole("tab", { name: "Layers" }).click()
     await expect(page.getByLabel("Buildings")).not.toBeChecked()
@@ -158,6 +171,7 @@ test.describe("Map Poster Studio", () => {
     })
 
     await page.goto(`/#p=${hash}`)
+    await openControlsMenu(page)
     await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
     await expect(page.getByLabel("City", { exact: true })).toHaveValue("Hong Kong Island")
     await expect(page.getByText("22.2800° N, 114.1600° E")).toBeVisible()
@@ -195,6 +209,7 @@ test.describe("Map Poster Studio", () => {
     })
 
     await page.goto(`/#p=${hash}`)
+    await openControlsMenu(page)
     await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
     await page.waitForTimeout(1200)
     expect(geocodeCalls).toBe(0)
@@ -202,21 +217,23 @@ test.describe("Map Poster Studio", () => {
     await expect(page.getByText(/Suggested map radius \d+ m from place size/i)).toHaveCount(0)
   })
 
-  test("opens location sheet on a phone-sized viewport", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 })
+  test("opens controls sheet from Menu on desktop and phone", async ({ page }) => {
     await page.goto("/")
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toHaveCount(0)
 
-    await expect(page.getByRole("heading", { name: "Preview" })).toBeVisible()
-    await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
-    await expect(page.getByRole("button", { name: "Location & style" })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Location" })).toHaveCount(0)
-
-    await page.getByRole("button", { name: "Location & style" }).click()
-    await expect(page.getByRole("heading", { name: "Location & style" })).toBeVisible()
+    await openControlsMenu(page)
     await expect(page.getByRole("heading", { name: "Location", exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Style", exact: true })).toBeVisible()
     await expect(page.getByLabel("City")).toBeVisible()
     await expect(page.getByText("About radius")).toBeVisible()
+
+    await page.getByRole("button", { name: "Close" }).click()
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toHaveCount(0)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openControlsMenu(page)
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toBeVisible()
+    await expect(page.getByLabel("City")).toBeVisible()
   })
 
   test("looks up place after the user edits city on a restored share link", async ({ page }) => {
@@ -247,6 +264,7 @@ test.describe("Map Poster Studio", () => {
     })
 
     await page.goto(`/#p=${hash}`)
+    await openControlsMenu(page)
     await expect(page.getByText("4321 m", { exact: true })).toBeVisible()
     expect(geocodeCalls).toBe(0)
 

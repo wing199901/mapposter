@@ -1,16 +1,14 @@
 # Design direction
 
-Map Poster Studio uses a professional cartographic editor layout:
+Map Poster Studio is a map-first poster editor — the live poster is the main character:
 
-- Two-column desktop shell: location + style controls (~1/2), preview (~1/2)
-- Style panel: Themes, Layers, and Labels
-- Export (size presets, custom inches, PNG / SVG / all-themes ZIP) lives in a Preview header popover
+- **Poster-dominant shell**: first viewport is near full-bleed preview (soft muted stage), not a permanent controls dashboard
+- **Controls behind Menu**: Location and Style (Themes, Layers, Labels) stay hidden until a header **Menu** button opens a Sheet (right drawer on wide viewports, bottom sheet on narrow)
+- Export (size presets, custom inches, PNG / SVG / all-themes ZIP) stays visible as a compact Preview-toolbar popover; Share stays a compact header action
 - Live MapLibre map preview with HTML typography overlay; no Generate button
 - Minimal neutral palette with semantic shadcn tokens
-- Preview-first column with soft muted backdrop; poster preview top-aligned
-- Compact theme grid with swatch chips
+- Compact theme grid with swatch chips inside the Menu sheet
 - First session (no share hash / autosave): bilingual Hong Kong demo with regional Noto; Latin letter-spacing posters remain a first-class fallback
 - Location may offer a short row of place examples (text actions, not a gallery dashboard)
-- Mobile: preview-first stacked shell; Location + Style open in a bottom Sheet; touch-friendly Export in the Preview header
 
-This direction replaces a blocking Superdesign canvas review for automated implementation. The UI follows the plan's minimalist cartographic aesthetic with generous whitespace and preview-dominant composition.
+This direction replaces the earlier permanent two-column desktop shell (controls ~1/2 + preview ~1/2). The UI keeps a minimalist cartographic aesthetic with the poster composition leading.
