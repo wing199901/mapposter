@@ -11,6 +11,6 @@ Map Poster Studio uses a professional cartographic editor layout:
 - Compact theme grid with swatch chips
 - First session (no share hash / autosave): bilingual Hong Kong demo with regional Noto; Latin letter-spacing posters remain a first-class fallback
 - Location may offer a short row of place examples (text actions, not a gallery dashboard)
-- Mobile: stacked panels (future enhancement via Sheet components)
+- Mobile: preview-first stacked shell; Location + Style open in a bottom Sheet; touch-friendly Export in the Preview header
 
 This direction replaces a blocking Superdesign canvas review for automated implementation. The UI follows the plan's minimalist cartographic aesthetic with generous whitespace and preview-dominant composition.

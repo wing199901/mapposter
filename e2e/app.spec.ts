@@ -202,6 +202,23 @@ test.describe("Map Poster Studio", () => {
     await expect(page.getByText(/Suggested map radius \d+ m from place size/i)).toHaveCount(0)
   })
 
+  test("opens location sheet on a phone-sized viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto("/")
+
+    await expect(page.getByRole("heading", { name: "Preview" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Location & style" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Location" })).toHaveCount(0)
+
+    await page.getByRole("button", { name: "Location & style" }).click()
+    await expect(page.getByRole("heading", { name: "Location & style" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Location", exact: true })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Style", exact: true })).toBeVisible()
+    await expect(page.getByLabel("City")).toBeVisible()
+    await expect(page.getByText("About radius")).toBeVisible()
+  })
+
   test("looks up place after the user edits city on a restored share link", async ({ page }) => {
     let geocodeCalls = 0
     await page.route("**/api/geocode**", async (route) => {
