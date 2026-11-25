@@ -142,7 +142,12 @@ export function EditorApp() {
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")
-    const syncViewport = () => setIsWideViewport(media.matches)
+    const syncViewport = () => {
+      setIsWideViewport(media.matches)
+      if (media.matches) {
+        setControlsOpen(false)
+      }
+    }
     syncViewport()
     media.addEventListener("change", syncViewport)
     return () => media.removeEventListener("change", syncViewport)
@@ -659,52 +664,71 @@ export function EditorApp() {
     />
   )
 
+  const mapPreview = (
+    <MapPosterPreview
+      ref={mapRef}
+      config={config}
+      theme={theme}
+      boundaryGeometry={boundaryGeometry}
+      onViewportChange={handleViewportChange}
+      onStatusChange={(status) => {
+        setMapStatus(status)
+        setMapReady(status.ready)
+      }}
+    />
+  )
+
+  const previewHint = isWideViewport
+    ? "Drag to pan and scroll to zoom. Export when preview status shows all tiles loaded."
+    : "Drag to pan and scroll to zoom. Open Menu to change location or style. Export when tiles are loaded."
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Toaster richColors position="top-center" />
       <header className="z-20 border-b bg-card/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-3.5 lg:px-6">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="min-h-11 shrink-0"
-              aria-expanded={controlsOpen}
-              aria-controls="editor-controls-sheet"
-              onClick={() => setControlsOpen(true)}
-            >
-              <Menu data-icon="inline-start" />
-              Menu
-            </Button>
-            <div className="flex min-w-0 flex-col gap-0.5">
+            {!isWideViewport ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="min-h-11 shrink-0"
+                aria-expanded={controlsOpen}
+                aria-controls="editor-controls-sheet"
+                onClick={() => setControlsOpen(true)}
+              >
+                <Menu data-icon="inline-start" />
+                Menu
+              </Button>
+            ) : null}
+            <div className="flex min-w-0 flex-col gap-0.5 sm:gap-1">
               <div className="flex items-center gap-2">
                 <Sparkles data-icon="inline-start" className="size-4 shrink-0 text-primary sm:size-5" />
-                <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+                <h1 className="truncate text-base font-semibold tracking-tight sm:text-xl">
                   Map Poster Studio
                 </h1>
               </div>
-              <p className="hidden max-w-xl text-xs text-muted-foreground sm:block">
-                Bilingual map posters with regional CJK lettering — Hong Kong–ready Noto families.
+              <p className="hidden max-w-xl text-xs text-muted-foreground sm:block sm:text-sm">
+                Bilingual map posters with regional CJK lettering — Hong Kong–ready Noto families,
+                live preview, print-ready SVG at 300 DPI.
               </p>
             </div>
           </div>
-          <div className="flex min-w-0 flex-col items-end gap-2">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                className="min-h-11 sm:min-h-9"
-                onClick={() => {
-                  navigator.clipboard.writeText(shareLink)
-                  toast.success("Share link copied")
-                }}
-              >
-                <Share2 data-icon="inline-start" />
-                Share
-              </Button>
-            </div>
+          <div className="flex min-w-0 flex-col items-end gap-2 sm:max-w-sm">
+            <Button
+              variant="outline"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => {
+                navigator.clipboard.writeText(shareLink)
+                toast.success("Share link copied")
+              }}
+            >
+              <Share2 data-icon="inline-start" />
+              Share
+            </Button>
             {isBusy ? (
-              <div className="w-40 space-y-1 sm:w-56">
+              <div className="w-40 space-y-1 sm:w-full">
                 <Progress value={progressPercent} />
                 <p className="text-right text-xs text-muted-foreground">
                   {progress.message} · {progressPercent}%
@@ -715,69 +739,82 @@ export function EditorApp() {
         </div>
       </header>
 
-      <main className="relative flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 border-b bg-background/90 px-3 py-2 sm:px-4 lg:px-6">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Preview</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI · {config.widthInches} ×{" "}
-              {config.heightInches} in
-              {!isPlaceLookingUp && mapStatus.phase === "ready"
-                ? " · tiles loaded"
-                : isPlaceLookingUp
-                  ? " · looking up place…"
-                  : ` · ${mapStatus.message}`}
-            </p>
-          </div>
-          {exportControl}
-        </div>
-
-        <div className="relative flex flex-1 flex-col bg-muted/35">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col items-center justify-center px-3 py-4 sm:px-6 sm:py-6 lg:min-h-[calc(100vh-7.5rem)] lg:px-8 lg:py-8">
-            <div className="flex w-full max-w-4xl justify-center">
-              <MapPosterPreview
-                ref={mapRef}
-                config={config}
-                theme={theme}
-                boundaryGeometry={boundaryGeometry}
-                onViewportChange={handleViewportChange}
-                onStatusChange={(status) => {
-                  setMapStatus(status)
-                  setMapReady(status.ready)
-                }}
-              />
-            </div>
-            <p className="mt-3 max-w-xl text-center text-xs text-muted-foreground">
-              Drag to pan and scroll to zoom. Open Menu to change location or style. Export when
-              tiles are loaded.
-            </p>
-            {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
-          </div>
-        </div>
-      </main>
-
-      <Sheet open={controlsOpen} onOpenChange={setControlsOpen}>
-        <SheetContent
-          id="editor-controls-sheet"
-          side={isWideViewport ? "right" : "bottom"}
-          className={
-            isWideViewport
-              ? "w-full gap-3 overflow-y-auto sm:max-w-md"
-              : "max-h-[90vh] gap-3 overflow-y-auto pb-6"
-          }
-        >
-          <SheetHeader>
-            <SheetTitle>Location & style</SheetTitle>
-            <SheetDescription>
-              Set the place and theme, then close to return to the poster.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-col gap-4">
+      {isWideViewport ? (
+        <main className="mx-auto grid w-full max-w-[1600px] gap-5 p-4 lg:grid-cols-2 lg:gap-6 lg:p-6">
+          <div className="flex flex-col gap-4 lg:gap-5">
             {locationCard}
             {styleCard}
           </div>
-        </SheetContent>
-      </Sheet>
+          <Card className="flex h-fit flex-col">
+            <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3 sm:gap-4">
+              <div className="flex min-w-0 flex-col gap-1">
+                <CardTitle>Preview</CardTitle>
+                <CardDescription>
+                  {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI · {config.widthInches} ×{" "}
+                  {config.heightInches} in
+                </CardDescription>
+              </div>
+              {exportControl}
+            </CardHeader>
+            <CardContent className="flex flex-col pt-0">
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-center rounded-xl border bg-muted/40 p-3 sm:p-5 lg:min-h-[28rem] lg:p-6">
+                  {mapPreview}
+                </div>
+                <p className="text-xs text-muted-foreground">{previewHint}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      ) : (
+        <main className="relative flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center justify-between gap-3 border-b bg-background/90 px-3 py-2 sm:px-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Preview</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {pixelSize.widthPx} × {pixelSize.heightPx} px at 300 DPI · {config.widthInches} ×{" "}
+                {config.heightInches} in
+                {!isPlaceLookingUp && mapStatus.phase === "ready"
+                  ? " · tiles loaded"
+                  : isPlaceLookingUp
+                    ? " · looking up place…"
+                    : ` · ${mapStatus.message}`}
+              </p>
+            </div>
+            {exportControl}
+          </div>
+          <div className="relative flex flex-1 flex-col bg-muted/35">
+            <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col items-center justify-center px-3 py-4 sm:px-6 sm:py-6">
+              <div className="flex w-full max-w-4xl flex-col items-center">
+                {mapPreview}
+                <p className="mt-3 text-center text-xs text-muted-foreground">{previewHint}</p>
+                {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
+              </div>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {!isWideViewport ? (
+        <Sheet open={controlsOpen} onOpenChange={setControlsOpen}>
+          <SheetContent
+            id="editor-controls-sheet"
+            side="bottom"
+            className="max-h-[90vh] gap-3 overflow-y-auto pb-6"
+          >
+            <SheetHeader>
+              <SheetTitle>Location & style</SheetTitle>
+              <SheetDescription>
+                Set the place and theme, then close to return to the poster.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex flex-col gap-4">
+              {locationCard}
+              {styleCard}
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </div>
   )
 }

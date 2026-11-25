@@ -26,7 +26,7 @@ Inspired by [originalankur/maptoposter](https://github.com/originalankur/maptopo
 - Shareable URL state + local autosave
 - Theme JSON editor
 - Live MapLibre preview (pan/zoom, no Generate button)
-- Map-first shell: poster preview dominates; Location & Style open from a Menu Sheet
+- Desktop two-column editor; mobile map-first shell with Menu Sheet for Location & Style
 - Layer toggles (water, roads, buildings, rail, ship routes)
 - Optional city boundary mask
 - Vector SVG + PNG export; batch all-themes ZIP
