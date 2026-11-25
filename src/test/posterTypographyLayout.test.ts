@@ -60,7 +60,7 @@ describe("posterTypographyLayout export presets", () => {
     expect(lines.country.applyLatinTracking).toBe(true)
   })
 
-  it("keeps Latin-only city formatting unchanged", () => {
+  it("keeps Latin-only city and country formatting letter-spaced", () => {
     const lines = formatPosterDisplayLines({
       city: "Hong Kong Island",
       country: "Hong Kong",
@@ -69,6 +69,15 @@ describe("posterTypographyLayout export presets", () => {
     expect(lines.city.local).toBe("H O N G\u2003K O N G\u2003I S L A N D")
     expect(lines.city.latin).toBeUndefined()
     expect(lines.city.applyLatinTracking).toBe(true)
+    expect(lines.country.local).toBe("H O N G\u2003K O N G")
+    expect(lines.country.applyLatinTracking).toBe(true)
+  })
+
+  it("keeps country clearly secondary to place in size hierarchy", () => {
+    const layout = posterTypographyLayout(3600, 4800)
+    expect(layout.fonts.country).toBeLessThan(layout.fonts.city * 0.55)
+    expect(layout.fonts.country).toBeGreaterThanOrEqual(10)
+    expect(layout.fromBottom.city - layout.fromBottom.country).toBeGreaterThan(0.02)
   })
 
   it("keeps pair layout when place local exists even if country latin is missing", () => {

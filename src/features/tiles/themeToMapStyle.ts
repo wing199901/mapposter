@@ -3,7 +3,11 @@ import type { StyleSpecification } from "maplibre-gl"
 import type { PosterLayerVisibility, PosterTheme } from "@/lib/types"
 import { DEFAULT_LAYER_VISIBILITY } from "@/lib/types"
 
-import { themeColorForLayer } from "./themePaint"
+import {
+  BUILDINGS_FILL_OPACITY,
+  previewStrokeBaseForLayer,
+  themeColorForLayer,
+} from "./themePaint"
 
 import { OPENFREEMAP_GLYPHS, OPENFREEMAP_TILEJSON, WATER_SOURCE_MINZOOM } from "./constants"
 
@@ -166,7 +170,10 @@ export function themeToMapStyle(
       type: "fill",
       source: "openmaptiles",
       "source-layer": "building",
-      paint: { "fill-color": themeColorForLayer(theme, "buildings"), "fill-opacity": 0.85 },
+      paint: {
+        "fill-color": themeColorForLayer(theme, "buildings"),
+        "fill-opacity": BUILDINGS_FILL_OPACITY,
+      },
     } satisfies FillLayer)
   }
 
@@ -183,6 +190,7 @@ export function themeToMapStyle(
   }
 
   if (v.waterway) {
+    const waterwayBase = previewStrokeBaseForLayer("waterway")
     layers.push({
       id: "waterway",
       type: "line",
@@ -191,7 +199,7 @@ export function themeToMapStyle(
       filter: WATER_LAYER_FILTER,
       paint: {
         "line-color": themeColorForLayer(theme, "waterway"),
-        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 14, 1.5],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, waterwayBase, 14, waterwayBase * 1.25],
       },
     })
   }
@@ -202,13 +210,18 @@ export function themeToMapStyle(
         "road-residential",
         themeColorForLayer(theme, "road-residential"),
         ["match", ["get", "class"], ["minor", "service", "track", "path"], true, false],
-        0.6,
+        previewStrokeBaseForLayer("road-residential"),
       ),
     )
   }
   if (v.roadTertiary) {
     layers.push(
-      roadLayer("road-tertiary", themeColorForLayer(theme, "road-tertiary"), ["==", ["get", "class"], "tertiary"], 1),
+      roadLayer(
+        "road-tertiary",
+        themeColorForLayer(theme, "road-tertiary"),
+        ["==", ["get", "class"], "tertiary"],
+        previewStrokeBaseForLayer("road-tertiary"),
+      ),
     )
   }
   if (v.roadSecondary) {
@@ -217,7 +230,7 @@ export function themeToMapStyle(
         "road-secondary",
         themeColorForLayer(theme, "road-secondary"),
         ["==", ["get", "class"], "secondary"],
-        1.4,
+        previewStrokeBaseForLayer("road-secondary"),
       ),
     )
   }
@@ -227,7 +240,7 @@ export function themeToMapStyle(
         "road-primary",
         themeColorForLayer(theme, "road-primary"),
         ["match", ["get", "class"], ["primary", "trunk"], true, false],
-        2,
+        previewStrokeBaseForLayer("road-primary"),
       ),
     )
   }
@@ -246,7 +259,7 @@ export function themeToMapStyle(
             ["==", ["get", "brunnel"], "tunnel"],
           ],
         ],
-        2.8,
+        previewStrokeBaseForLayer("road-motorway"),
       ),
     )
     layers.push(
@@ -254,12 +267,19 @@ export function themeToMapStyle(
         "road-bridge-deck",
         themeColorForLayer(theme, "road-bridge-deck"),
         ["==", ["get", "class"], "bridge"],
-        2.4,
+        previewStrokeBaseForLayer("road-bridge-deck"),
       ),
     )
   }
   if (v.roadDefault) {
-    layers.push(roadLayer("road-default", themeColorForLayer(theme, "road-default"), ROAD_DEFAULT_FILTER, 0.8))
+    layers.push(
+      roadLayer(
+        "road-default",
+        themeColorForLayer(theme, "road-default"),
+        ROAD_DEFAULT_FILTER,
+        previewStrokeBaseForLayer("road-default"),
+      ),
+    )
   }
   if (v.rail) {
     layers.push(
@@ -267,12 +287,19 @@ export function themeToMapStyle(
         "road-rail",
         themeColorForLayer(theme, "road-rail"),
         ["match", ["get", "class"], ["rail", "transit"], true, false],
-        1.2,
+        previewStrokeBaseForLayer("road-rail"),
       ),
     )
   }
   if (v.shipRoutes) {
-    layers.push(roadLayer("road-ferry", themeColorForLayer(theme, "road-ferry"), ["==", ["get", "class"], "ferry"], 1))
+    layers.push(
+      roadLayer(
+        "road-ferry",
+        themeColorForLayer(theme, "road-ferry"),
+        ["==", ["get", "class"], "ferry"],
+        previewStrokeBaseForLayer("road-ferry"),
+      ),
+    )
   }
 
   return {

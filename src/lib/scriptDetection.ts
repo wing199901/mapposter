@@ -15,6 +15,18 @@ export function isLatinScript(text: string): boolean {
 /** Em space between words — survives HTML whitespace collapsing unlike regular spaces. */
 const LATIN_LABEL_WORD_GAP = "\u2003"
 
+/**
+ * Extra letter-spacing for Latin-only place/country lines (matches Tailwind `tracking-wide`).
+ * Applied in Preview CSS, SVG `letter-spacing`, and canvas PNG fallback when
+ * `*ApplyLatinTracking` is set.
+ */
+export const LATIN_TRACKING_EM = 0.025
+
+/** CSS / canvas letter-spacing value for Latin-only tracking (or none). */
+export function latinTrackingLetterSpacing(apply: boolean): string {
+  return apply ? `${LATIN_TRACKING_EM}em` : "0px"
+}
+
 function letterSpaceWord(word: string): string {
   return [...word.toUpperCase()].join(" ")
 }
@@ -99,8 +111,8 @@ export function formatPosterDisplayLines(display: DisplayLabels): PosterDisplayL
         applyLatinTracking: isLatinScript(display.city),
       },
       country: {
-        local: display.country,
-        applyLatinTracking: false,
+        local: formatCityLabel(display.country),
+        applyLatinTracking: isLatinScript(display.country),
       },
     }
   }
